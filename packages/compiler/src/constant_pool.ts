@@ -40,7 +40,8 @@ const KEY_CONTEXT = {};
 class FixupExpression extends o.Expression {
   private original: o.Expression;
 
-  shared: boolean;
+  // TODO(issue/24571): remove '!'.
+  shared !: boolean;
 
   constructor(public resolved: o.Expression) {
     super(resolved.type);
@@ -295,7 +296,9 @@ class KeyVisitor implements o.ExpressionVisitor {
                                   `EX:${ast.value.runtime.name}`;
   }
 
-  visitReadVarExpr = invalid;
+  visitReadVarExpr(node: o.ReadVarExpr) { return `VAR:${node.name}`; }
+
+  visitWrappedNodeExpr = invalid;
   visitWriteVarExpr = invalid;
   visitWriteKeyExpr = invalid;
   visitWritePropExpr = invalid;

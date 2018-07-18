@@ -6,8 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-var browserProvidersConf = require('./browser-providers.conf.js');
-var internalAngularReporter = require('./tools/karma/reporter.js');
+const browserProvidersConf = require('./browser-providers.conf');
+const {generateSeed} = require('./tools/jasmine-seed-generator');
 
 // Karma configuration
 // Generated on Thu Sep 25 2014 11:52:02 GMT-0700 (PDT)
@@ -15,6 +15,13 @@ module.exports = function(config) {
   config.set({
 
     frameworks: ['jasmine'],
+
+    client: {
+      jasmine: {
+        random: true,
+        seed: generateSeed('karma-js.conf'),
+      },
+    },
 
     files: [
       // Sources and specs.
@@ -29,13 +36,8 @@ module.exports = function(config) {
 
       'node_modules/core-js/client/core.js',
       'node_modules/zone.js/dist/zone.js',
-      'node_modules/zone.js/dist/long-stack-trace-zone.js',
+      'node_modules/zone.js/dist/zone-testing.js',
       'node_modules/zone.js/dist/task-tracking.js',
-      'node_modules/zone.js/dist/proxy.js',
-      'node_modules/zone.js/dist/sync-test.js',
-      'node_modules/zone.js/dist/jasmine-patch.js',
-      'node_modules/zone.js/dist/async-test.js',
-      'node_modules/zone.js/dist/fake-async-test.js',
 
       // Including systemjs because it defines `__eval`, which produces correct stack traces.
       'test-events.js',
@@ -70,9 +72,13 @@ module.exports = function(config) {
       'dist/all/@angular/**/*node_only_spec.js',
       'dist/all/@angular/benchpress/**',
       'dist/all/@angular/compiler-cli/**',
+      'dist/all/@angular/compiler-cli/src/ngtsc/**',
+      'dist/all/@angular/compiler-cli/test/ngtsc/**',
       'dist/all/@angular/compiler/test/aot/**',
       'dist/all/@angular/compiler/test/render3/**',
       'dist/all/@angular/core/test/bundling/**',
+      'dist/all/@angular/core/test/render3/ivy/**',
+      'dist/all/@angular/elements/schematics/**',
       'dist/all/@angular/examples/**/e2e_test/*',
       'dist/all/@angular/language-service/**',
       'dist/all/@angular/router/test/**',
@@ -89,14 +95,23 @@ module.exports = function(config) {
       'karma-sauce-launcher',
       'karma-chrome-launcher',
       'karma-sourcemap-loader',
-      internalAngularReporter,
     ],
 
     preprocessors: {
       '**/*.js': ['sourcemap'],
     },
 
-    reporters: ['internal-angular'],
+    // Bazel inter-op: Allow tests to request resources from either
+    //   /base/node_modules/path/to/thing
+    // or
+    //   /base/angular/node_modules/path/to/thing
+    // This can be removed when all karma tests are run under Bazel, then we
+    // don't need this entire config file.
+    proxies: {
+      '/base/angular/': '/base/',
+    },
+
+    reporters: ['dots'],
     sauceLabs: {
       testName: 'Angular2',
       retryLimit: 3,

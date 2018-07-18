@@ -13,19 +13,21 @@ import * as shx from 'shelljs';
 shx.cd(path.join(process.env['TEST_SRCDIR'], 'angular', 'packages', 'common', 'npm_package'));
 
 describe('@angular/common ng_package', () => {
-  it('should have the locales files', () => {
+  describe('should have the locales files', () => {
     it('/locales', () => {
-      const files = shx.ls('-R', 'locales').stdout.split('\n');
+      const files = shx.ls('locales').stdout.split('\n');
       expect(files.some(n => n.endsWith('.d.ts'))).toBe(true, `.d.ts files don't exist`);
       expect(files.some(n => n.endsWith('.js'))).toBe(true, `.js files don't exist`);
-      expect(files.some(n => n.endsWith('.js.map'))).toBe(true, `.js.map files don't exist`);
     });
     it('/locales/extra', () => {
-      const files = shx.ls('-R', 'locales/extra').stdout.split('\n');
+      const files = shx.ls('locales/extra').stdout.split('\n');
       expect(files.some(n => n.endsWith('.d.ts'))).toBe(true, `.d.ts files don't exist`);
       expect(files.some(n => n.endsWith('.js'))).toBe(true, `.js files don't exist`);
-      expect(files.some(n => n.endsWith('.js.map'))).toBe(true, `.js.map files don't exist`);
     });
+    // regression test for https://github.com/angular/angular/issues/23217
+    // Note, we don't have an e2e test that covers this
+    it('doesn\'t pass require in a way that breaks webpack static analysis',
+       () => { expect(shx.cat('locales/fr.js')).not.toContain('factory(require, exports)'); });
   });
 
   it('should have right bundle files', () => {
@@ -67,6 +69,7 @@ describe('@angular/common ng_package', () => {
     expect(shx.ls('-R', 'fesm5').stdout.split('\n').filter(n => !!n).sort()).toEqual(expected);
     expect(shx.ls('-R', 'fesm2015').stdout.split('\n').filter(n => !!n).sort()).toEqual(expected);
   });
+
   describe('should have module resolution properties in the package.json file for', () => {
     // https://github.com/angular/common-builds/blob/master/package.json
     it('/', () => {

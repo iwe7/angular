@@ -15,6 +15,7 @@ import * as ts from 'typescript';
 import {TypeCheckHost, translateDiagnostics} from '../diagnostics/translate_diagnostics';
 import {compareVersions} from '../diagnostics/typescript_version';
 import {MetadataCollector, ModuleMetadata, createBundleIndexHost} from '../metadata/index';
+import {NgtscProgram} from '../ngtsc/program';
 
 import {CompilerHost, CompilerOptions, CustomTransformers, DEFAULT_ERROR_CODE, Diagnostic, DiagnosticMessageChain, EmitFlags, LazyRoute, LibrarySummary, Program, SOURCE, TsEmitArguments, TsEmitCallback, TsMergeEmitResultsCallback} from './api';
 import {CodeGenerator, TsCompilerAotCompilerTypeCheckHostAdapter, getOriginalReferences} from './compiler_host';
@@ -25,6 +26,7 @@ import {getAngularEmitterTransformFactory} from './node_emitter_transform';
 import {PartialModuleMetadataTransformer} from './r3_metadata_transform';
 import {StripDecoratorsMetadataTransformer, getDecoratorStripTransformerFactory} from './r3_strip_decorators';
 import {getAngularClassTransformerFactory} from './r3_transform';
+import {TscPassThroughProgram} from './tsc_pass_through';
 import {DTS, GENERATED_FILES, StructureIsReused, TS, createMessageDiagnostic, isInRootDir, ngToTsDiagnostic, tsStructureIsReused, userError} from './util';
 
 
@@ -69,7 +71,7 @@ const MAX_FILE_COUNT_FOR_SINGLE_FILE_EMIT = 20;
 /**
  * Fields to lower within metadata in render2 mode.
  */
-const LOWER_FIELDS = ['useValue', 'useFactory', 'data', 'id'];
+const LOWER_FIELDS = ['useValue', 'useFactory', 'data', 'id', 'loadChildren'];
 
 /**
  * Fields to lower within metadata in render3 mode.
@@ -107,11 +109,14 @@ const MIN_TS_VERSION = '2.7.2';
  * ∀ supported typescript version v, v < MAX_TS_VERSION
  * MAX_TS_VERSION is not considered as a supported TypeScript version
  */
-const MAX_TS_VERSION = '2.8.0';
+const MAX_TS_VERSION = '2.10.0';
 
 class AngularCompilerProgram implements Program {
   private rootNames: string[];
   private metadataCache: MetadataCache;
+  // Metadata cache used exclusively for the flat module index
+  // TODO(issue/24571): remove '!'.
+  private flatModuleMetadataCache !: MetadataCache;
   private loweringMetadataTransform: LowerMetadataTransform;
   private oldProgramLibrarySummaries: Map<string, LibrarySummary>|undefined;
   private oldProgramEmittedGeneratedFiles: Map<string, GeneratedFile>|undefined;
@@ -123,15 +128,19 @@ class AngularCompilerProgram implements Program {
   private emittedSourceFiles: ts.SourceFile[]|undefined;
 
   // Lazily initialized fields
-  private _compiler: AotCompiler;
-  private _hostAdapter: TsCompilerAotCompilerTypeCheckHostAdapter;
-  private _tsProgram: ts.Program;
+  // TODO(issue/24571): remove '!'.
+  private _compiler !: AotCompiler;
+  // TODO(issue/24571): remove '!'.
+  private _hostAdapter !: TsCompilerAotCompilerTypeCheckHostAdapter;
+  // TODO(issue/24571): remove '!'.
+  private _tsProgram !: ts.Program;
   private _analyzedModules: NgAnalyzedModules|undefined;
   private _analyzedInjectables: NgAnalyzedFileWithInjectables[]|undefined;
   private _structuralDiagnostics: Diagnostic[]|undefined;
   private _programWithStubs: ts.Program|undefined;
   private _optionsDiagnostics: Diagnostic[] = [];
-  private _reifiedDecorators: Set<StaticSymbol>;
+  // TODO(issue/24571): remove '!'.
+  private _reifiedDecorators !: Set<StaticSymbol>;
 
   constructor(
       rootNames: ReadonlyArray<string>, private options: CompilerOptions,
@@ -149,7 +158,7 @@ class AngularCompilerProgram implements Program {
 
     if (options.flatModuleOutFile) {
       const {host: bundleHost, indexName, errors} =
-          createBundleIndexHost(options, this.rootNames, host);
+          createBundleIndexHost(options, this.rootNames, host, () => this.flatModuleMetadataCache);
       if (errors) {
         this._optionsDiagnostics.push(...errors.map(e => ({
                                                       category: e.category,
@@ -284,6 +293,9 @@ class AngularCompilerProgram implements Program {
     emitCallback?: TsEmitCallback,
     mergeEmitResultsCallback?: TsMergeEmitResultsCallback,
   } = {}): ts.EmitResult {
+    if (this.options.enableIvy === 'ngtsc' || this.options.enableIvy === 'tsc') {
+      throw new Error('Cannot run legacy compiler in ngtsc mode');
+    }
     return this.options.enableIvy === true ? this._emitRender3(parameters) :
                                              this._emitRender2(parameters);
   }
@@ -331,15 +343,34 @@ class AngularCompilerProgram implements Program {
         /* genFiles */ undefined, /* partialModules */ modules,
         /* stripDecorators */ this.reifiedDecorators, customTransformers);
 
-    const emitResult = emitCallback({
-      program: this.tsProgram,
-      host: this.host,
-      options: this.options,
-      writeFile: writeTsFile, emitOnlyDtsFiles,
-      customTransformers: tsCustomTransformers
-    });
 
-    return emitResult;
+    // Restore the original references before we emit so TypeScript doesn't emit
+    // a reference to the .d.ts file.
+    const augmentedReferences = new Map<ts.SourceFile, ReadonlyArray<ts.FileReference>>();
+    for (const sourceFile of this.tsProgram.getSourceFiles()) {
+      const originalReferences = getOriginalReferences(sourceFile);
+      if (originalReferences) {
+        augmentedReferences.set(sourceFile, sourceFile.referencedFiles);
+        sourceFile.referencedFiles = originalReferences;
+      }
+    }
+
+    try {
+      return emitCallback({
+        program: this.tsProgram,
+        host: this.host,
+        options: this.options,
+        writeFile: writeTsFile, emitOnlyDtsFiles,
+        customTransformers: tsCustomTransformers
+      });
+    } finally {
+      // Restore the references back to the augmented value to ensure that the
+      // checks that TypeScript makes for project structure reuse will succeed.
+      for (const [sourceFile, references] of Array.from(augmentedReferences)) {
+        // TODO(chuckj): Remove any cast after updating build to 2.6
+        (sourceFile as any).referencedFiles = references;
+      }
+    }
   }
 
   private _emitRender2(
@@ -518,6 +549,7 @@ class AngularCompilerProgram implements Program {
         `- ${genJsonFiles.length + metadataJsonCount} generated json files`,
       ].join('\n'))]);
     }
+
     return emitResult;
   }
 
@@ -574,9 +606,12 @@ class AngularCompilerProgram implements Program {
       customTransformers?: CustomTransformers): ts.CustomTransformers {
     const beforeTs: Array<ts.TransformerFactory<ts.SourceFile>> = [];
     const metadataTransforms: MetadataTransformer[] = [];
+    const flatModuleMetadataTransforms: MetadataTransformer[] = [];
     if (this.options.enableResourceInlining) {
       beforeTs.push(getInlineResourcesTransformFactory(this.tsProgram, this.hostAdapter));
-      metadataTransforms.push(new InlineResourcesMetadataTransformer(this.hostAdapter));
+      const transformer = new InlineResourcesMetadataTransformer(this.hostAdapter);
+      metadataTransforms.push(transformer);
+      flatModuleMetadataTransforms.push(transformer);
     }
 
     if (!this.options.disableExpressionLowering) {
@@ -592,14 +627,18 @@ class AngularCompilerProgram implements Program {
 
       // If we have partial modules, the cached metadata might be incorrect as it doesn't reflect
       // the partial module transforms.
-      metadataTransforms.push(new PartialModuleMetadataTransformer(partialModules));
+      const transformer = new PartialModuleMetadataTransformer(partialModules);
+      metadataTransforms.push(transformer);
+      flatModuleMetadataTransforms.push(transformer);
     }
 
     if (stripDecorators) {
       beforeTs.push(getDecoratorStripTransformerFactory(
           stripDecorators, this.compiler.reflector, this.getTsProgram().getTypeChecker()));
-      metadataTransforms.push(
-          new StripDecoratorsMetadataTransformer(stripDecorators, this.compiler.reflector));
+      const transformer =
+          new StripDecoratorsMetadataTransformer(stripDecorators, this.compiler.reflector);
+      metadataTransforms.push(transformer);
+      flatModuleMetadataTransforms.push(transformer);
     }
 
     if (customTransformers && customTransformers.beforeTs) {
@@ -607,6 +646,9 @@ class AngularCompilerProgram implements Program {
     }
     if (metadataTransforms.length > 0) {
       this.metadataCache = this.createMetadataCache(metadataTransforms);
+    }
+    if (flatModuleMetadataTransforms.length > 0) {
+      this.flatModuleMetadataCache = this.createMetadataCache(flatModuleMetadataTransforms);
     }
     const afterTs = customTransformers ? customTransformers.afterTs : undefined;
     return {before: beforeTs, after: afterTs};
@@ -891,6 +933,11 @@ export function createProgram({rootNames, options, host, oldProgram}: {
   options: CompilerOptions,
   host: CompilerHost, oldProgram?: Program
 }): Program {
+  if (options.enableIvy === 'ngtsc') {
+    return new NgtscProgram(rootNames, options, host, oldProgram);
+  } else if (options.enableIvy === 'tsc') {
+    return new TscPassThroughProgram(rootNames, options, host, oldProgram);
+  }
   return new AngularCompilerProgram(rootNames, options, host, oldProgram);
 }
 

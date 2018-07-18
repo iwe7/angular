@@ -10,7 +10,7 @@ export type Ng1Token = string;
 
 export type Ng1Expression = string | Function;
 
-export interface IAnnotatedFunction extends Function { $inject?: Ng1Token[]; }
+export interface IAnnotatedFunction extends Function { $inject?: ReadonlyArray<Ng1Token>; }
 
 export type IInjectable = (Ng1Token | Function)[] | IAnnotatedFunction;
 
@@ -244,14 +244,14 @@ try {
 }
 
 /**
- * @deprecated Use {@link setAngularJSGlobal} instead.
+ * @deprecated Use `setAngularJSGlobal` instead.
  */
 export function setAngularLib(ng: any): void {
   setAngularJSGlobal(ng);
 }
 
 /**
- * @deprecated Use {@link getAngularJSGlobal} instead.
+ * @deprecated Use `getAngularJSGlobal` instead.
  */
 export function getAngularLib(): any {
   return getAngularJSGlobal();
@@ -262,7 +262,7 @@ export function getAngularLib(): any {
  *
  * Used when AngularJS is loaded lazily, and not available on `window`.
  *
- * @stable
+ *
  */
 export function setAngularJSGlobal(ng: any): void {
   angular = ng;
@@ -272,7 +272,7 @@ export function setAngularJSGlobal(ng: any): void {
 /**
  * Returns the current AngularJS global.
  *
- * @stable
+ *
  */
 export function getAngularJSGlobal(): any {
   return angular;

@@ -1,4 +1,4 @@
-load("//tools:defaults.bzl", "ts_library", "ts_web_test")
+load("//tools:defaults.bzl", "ts_library")
 load("@build_bazel_rules_nodejs//:defs.bzl", "jasmine_node_test")
 
 # Uses separate test rules to allow the tests to run in parallel
@@ -69,6 +69,7 @@ jasmine_node_test(
         "//packages/common:npm_package",
         "//packages/core:npm_package",
         "//packages/platform-browser:npm_package",
+        "//packages/router:npm_package",
     ],
     deps = [
         ":ngc_lib",

@@ -31,6 +31,8 @@ Here are a few essential commands for guide page authors.
 
 1.  http://localhost:4200/  &mdash;  browse to the app running locally.
 
+You can combine `yarn docs-watch` and `yarn start` into one command with `yarn serve-and-sync`.
+
 ## Guide pages
 
  All but a few guide pages are [markdown](https://daringfireball.net/projects/markdown/syntax "markdown") files with an `.md` extension.
@@ -740,7 +742,7 @@ Adding `<live-example></live-example>` to the page generates the two default lin
 
 2. a link that downloads that sample.
 
-Clicking the first link opens the code sample in a new browser tab in the "embedded Stackblitz" style.
+Clicking the first link opens the code sample on StackBlitz in a new browser tab.
 
 You can change the appearance and behavior of the live example with attributes and classes.
 
@@ -810,16 +812,13 @@ You can embed the Stackblitz within the guide page itself by adding the `embedde
 
 For performance reasons, the Stackblitz does not start right away. The reader sees an image instead. Clicking the image starts the sometimes-slow process of launching the embedded Stackblitz within an iframe on the page.
 
-You usually replace the default Stackblitz image with a custom image that better represents the sample.
-Store that image in the `content/images` directory in a folder with a name matching the corresponding example folder.
-
-Here's an embedded live example for this guide. It has a custom image created from a snapshot of the running app, overlayed with `content/images/Stackblitz/unused/click-to-run.png`.
+Here's an embedded live example for this guide.
 
 ```html
-<live-example embedded img="guide/docs-style-guide/docs-style-guide-Stackblitz.png"></live-example>
+<live-example embedded></live-example>
 ```
 
-<live-example embedded img="guide/docs-style-guide/docs-style-guide-Stackblitz.png"></live-example>
+<live-example embedded></live-example>
 
 {@a anchors}
 

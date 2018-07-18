@@ -12,17 +12,21 @@ import * as ts from 'typescript';
 
 import {TypeCheckHost} from '../diagnostics/translate_diagnostics';
 import {METADATA_VERSION, ModuleMetadata} from '../metadata/index';
+import {NgtscCompilerHost} from '../ngtsc/compiler_host';
 
 import {CompilerHost, CompilerOptions, LibrarySummary} from './api';
 import {MetadataReaderHost, createMetadataReaderCache, readMetadata} from './metadata_reader';
 import {DTS, GENERATED_FILES, isInRootDir, relativeToRootDirs} from './util';
 
-const NODE_MODULES_PACKAGE_NAME = /node_modules\/((\w|-)+|(@(\w|-)+\/(\w|-)+))/;
+const NODE_MODULES_PACKAGE_NAME = /node_modules\/((\w|-|\.)+|(@(\w|-|\.)+\/(\w|-|\.)+))/;
 const EXT = /(\.ts|\.d\.ts|\.js|\.jsx|\.tsx)$/;
 
 export function createCompilerHost(
     {options, tsHost = ts.createCompilerHost(options, true)}:
         {options: CompilerOptions, tsHost?: ts.CompilerHost}): CompilerHost {
+  if (options.enableIvy === 'ngtsc' || options.enableIvy === 'tsc') {
+    return new NgtscCompilerHost(tsHost);
+  }
   return tsHost;
 }
 
@@ -57,6 +61,7 @@ function assert<T>(condition: T | null | undefined) {
 export class TsCompilerAotCompilerTypeCheckHostAdapter implements ts.CompilerHost, AotCompilerHost,
     TypeCheckHost {
   private metadataReaderCache = createMetadataReaderCache();
+  private fileNameToModuleNameCache = new Map<string, string>();
   private flatModuleIndexCache = new Map<string, boolean>();
   private flatModuleIndexNames = new Set<string>();
   private flatModuleIndexRedirectNames = new Set<string>();
@@ -69,10 +74,14 @@ export class TsCompilerAotCompilerTypeCheckHostAdapter implements ts.CompilerHos
   private emitter = new TypeScriptEmitter();
   private metadataReaderHost: MetadataReaderHost;
 
-  getCancellationToken: () => ts.CancellationToken;
-  getDefaultLibLocation: () => string;
-  trace: (s: string) => void;
-  getDirectories: (path: string) => string[];
+  // TODO(issue/24571): remove '!'.
+  getCancellationToken !: () => ts.CancellationToken;
+  // TODO(issue/24571): remove '!'.
+  getDefaultLibLocation !: () => string;
+  // TODO(issue/24571): remove '!'.
+  trace !: (s: string) => void;
+  // TODO(issue/24571): remove '!'.
+  getDirectories !: (path: string) => string[];
   directoryExists?: (directoryName: string) => boolean;
 
   constructor(
@@ -187,6 +196,12 @@ export class TsCompilerAotCompilerTypeCheckHostAdapter implements ts.CompilerHos
    *    import project sources.
    */
   fileNameToModuleName(importedFile: string, containingFile: string): string {
+    const cacheKey = `${importedFile}:${containingFile}`;
+    let moduleName = this.fileNameToModuleNameCache.get(cacheKey);
+    if (moduleName != null) {
+      return moduleName;
+    }
+
     const originalImportedFile = importedFile;
     if (this.options.traceResolution) {
       console.error(
@@ -196,11 +211,10 @@ export class TsCompilerAotCompilerTypeCheckHostAdapter implements ts.CompilerHos
 
     // drop extension
     importedFile = importedFile.replace(EXT, '');
-    const importedFilePackagName = getPackageName(importedFile);
+    const importedFilePackageName = getPackageName(importedFile);
     const containingFilePackageName = getPackageName(containingFile);
 
-    let moduleName: string;
-    if (importedFilePackagName === containingFilePackageName ||
+    if (importedFilePackageName === containingFilePackageName ||
         GENERATED_FILES.test(originalImportedFile)) {
       const rootedContainingFile = relativeToRootDirs(containingFile, this.rootDirs);
       const rootedImportedFile = relativeToRootDirs(importedFile, this.rootDirs);
@@ -211,12 +225,31 @@ export class TsCompilerAotCompilerTypeCheckHostAdapter implements ts.CompilerHos
         importedFile = rootedImportedFile;
       }
       moduleName = dotRelative(path.dirname(containingFile), importedFile);
-    } else if (importedFilePackagName) {
+    } else if (importedFilePackageName) {
       moduleName = stripNodeModulesPrefix(importedFile);
+      if (originalImportedFile.endsWith('.d.ts')) {
+        // the moduleName for these typings could be shortented to the npm package name
+        // if the npm package typings matches the importedFile
+        try {
+          const modulePath = importedFile.substring(0, importedFile.length - moduleName.length) +
+              importedFilePackageName;
+          const packageJson = require(modulePath + '/package.json');
+          const packageTypings = path.posix.join(modulePath, packageJson.typings);
+          if (packageTypings === originalImportedFile) {
+            moduleName = importedFilePackageName;
+          }
+        } catch (e) {
+          // the above require() will throw if there is no package.json file
+          // and this is safe to ignore and correct to keep the longer
+          // moduleName in this case
+        }
+      }
     } else {
       throw new Error(
           `Trying to import a source file from a node_modules package: import ${originalImportedFile} from ${containingFile}`);
     }
+
+    this.fileNameToModuleNameCache.set(cacheKey, moduleName);
     return moduleName;
   }
 

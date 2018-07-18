@@ -18,21 +18,15 @@ import {UrlTree} from '../url_tree';
 
 
 /**
- * @whatItDoes Lets you link to specific parts of your app.
- *
- * @howToUse
- *
- * Consider the following route configuration:
- * `[{ path: 'user/:name', component: UserCmp }]`
- *
- * When linking to this `user/:name` route, you can write:
- * `<a routerLink='/user/bob'>link to user component</a>`
- *
  * @description
  *
- * The RouterLink directives let you link to specific parts of your app.
+ * Lets you link to specific routes in your app.
  *
- * When the link is static, you can use the directive as follows:
+ * Consider the following route configuration:
+ * `[{ path: 'user/:name', component: UserCmp }]`.
+ * When linking to this `user/:name` route, you use the `RouterLink` directive.
+ *
+ * If the link is static, you can use the directive as follows:
  * `<a routerLink="/user/bob">link to user component</a>`
  *
  * If you use dynamic values to generate the link, you can pass an array of path
@@ -94,18 +88,25 @@ import {UrlTree} from '../url_tree';
  *
  * @ngModule RouterModule
  *
- * @stable
+ *
  */
 @Directive({selector: ':not(a)[routerLink]'})
 export class RouterLink {
-  @Input() queryParams: {[k: string]: any};
-  @Input() fragment: string;
-  @Input() queryParamsHandling: QueryParamsHandling;
-  @Input() preserveFragment: boolean;
-  @Input() skipLocationChange: boolean;
-  @Input() replaceUrl: boolean;
+  // TODO(issue/24571): remove '!'.
+  @Input() queryParams !: {[k: string]: any};
+  // TODO(issue/24571): remove '!'.
+  @Input() fragment !: string;
+  // TODO(issue/24571): remove '!'.
+  @Input() queryParamsHandling !: QueryParamsHandling;
+  // TODO(issue/24571): remove '!'.
+  @Input() preserveFragment !: boolean;
+  // TODO(issue/24571): remove '!'.
+  @Input() skipLocationChange !: boolean;
+  // TODO(issue/24571): remove '!'.
+  @Input() replaceUrl !: boolean;
   private commands: any[] = [];
-  private preserve: boolean;
+  // TODO(issue/24571): remove '!'.
+  private preserve !: boolean;
 
   constructor(
       private router: Router, private route: ActivatedRoute,
@@ -158,29 +159,40 @@ export class RouterLink {
 }
 
 /**
- * @whatItDoes Lets you link to specific parts of your app.
+ * @description
  *
- * See {@link RouterLink} for more information.
+ * Lets you link to specific routes in your app.
+ *
+ * See `RouterLink` for more information.
  *
  * @ngModule RouterModule
  *
- * @stable
+ *
  */
 @Directive({selector: 'a[routerLink]'})
 export class RouterLinkWithHref implements OnChanges, OnDestroy {
-  @HostBinding('attr.target') @Input() target: string;
-  @Input() queryParams: {[k: string]: any};
-  @Input() fragment: string;
-  @Input() queryParamsHandling: QueryParamsHandling;
-  @Input() preserveFragment: boolean;
-  @Input() skipLocationChange: boolean;
-  @Input() replaceUrl: boolean;
+  // TODO(issue/24571): remove '!'.
+  @HostBinding('attr.target') @Input() target !: string;
+  // TODO(issue/24571): remove '!'.
+  @Input() queryParams !: {[k: string]: any};
+  // TODO(issue/24571): remove '!'.
+  @Input() fragment !: string;
+  // TODO(issue/24571): remove '!'.
+  @Input() queryParamsHandling !: QueryParamsHandling;
+  // TODO(issue/24571): remove '!'.
+  @Input() preserveFragment !: boolean;
+  // TODO(issue/24571): remove '!'.
+  @Input() skipLocationChange !: boolean;
+  // TODO(issue/24571): remove '!'.
+  @Input() replaceUrl !: boolean;
   private commands: any[] = [];
   private subscription: Subscription;
-  private preserve: boolean;
+  // TODO(issue/24571): remove '!'.
+  private preserve !: boolean;
 
   // the url displayed on the anchor element.
-  @HostBinding() href: string;
+  // TODO(issue/24571): remove '!'.
+  @HostBinding() href !: string;
 
   constructor(
       private router: Router, private route: ActivatedRoute,

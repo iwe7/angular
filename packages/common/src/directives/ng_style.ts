@@ -11,9 +11,7 @@ import {Directive, DoCheck, ElementRef, Input, KeyValueChanges, KeyValueDiffer, 
 /**
  * @ngModule CommonModule
  *
- * @whatItDoes Update an HTML element styles.
- *
- * @howToUse
+ * @usageNotes
  * ```
  * <some-element [ngStyle]="{'font-style': styleExp}">...</some-element>
  *
@@ -24,16 +22,20 @@ import {Directive, DoCheck, ElementRef, Input, KeyValueChanges, KeyValueDiffer, 
  *
  * @description
  *
+ * Update an HTML element styles.
+ *
  * The styles are updated according to the value of the expression evaluation:
  * - keys are style names with an optional `.<unit>` suffix (ie 'top.px', 'font-style.em'),
  * - values are the values assigned to those properties (expressed in the given unit).
  *
- * @stable
+ *
  */
 @Directive({selector: '[ngStyle]'})
 export class NgStyle implements DoCheck {
-  private _ngStyle: {[key: string]: string};
-  private _differ: KeyValueDiffer<string, string|number>;
+  // TODO(issue/24571): remove '!'.
+  private _ngStyle !: {[key: string]: string};
+  // TODO(issue/24571): remove '!'.
+  private _differ !: KeyValueDiffer<string, string|number>;
 
   constructor(
       private _differs: KeyValueDiffers, private _ngEl: ElementRef, private _renderer: Renderer2) {}

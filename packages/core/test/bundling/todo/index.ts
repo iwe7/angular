@@ -6,106 +6,151 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CommonModule, NgForOf} from '@angular/common';
-import {Component, EventEmitter, InjectFlags, Injectable, Input, IterableDiffers, NgModule, Output, createInjector, defineInjector, inject, ɵComponentDef as ComponentDef, ɵComponentType as ComponentType, ɵDirectiveDef as DirectiveDef, ɵDirectiveType as DirectiveType, ɵNgOnChangesFeature as NgOnChangesFeature, ɵdefaultIterableDiffers as defaultIterableDiffers, ɵdefineDirective as defineDirective, ɵinjectTemplateRef as injectTemplateRef, ɵinjectViewContainerRef as injectViewContainerRef, ɵmarkDirty as markDirty, ɵrenderComponent as renderComponent} from '@angular/core';
+import '@angular/core/test/bundling/util/src/reflect_metadata';
 
-export interface ToDo {
-  text: string;
-  done: boolean;
+import {CommonModule} from '@angular/common';
+import {Component, Injectable, NgModule, ɵrenderComponent as renderComponent} from '@angular/core';
+
+class Todo {
+  editing: boolean;
+
+  // TODO(issue/24571): remove '!'.
+  private _title !: string;
+  get title() { return this._title; }
+  set title(value: string) { this._title = value.trim(); }
+
+  constructor(title: string, public completed: boolean = false) {
+    this.editing = false;
+    this.title = title;
+  }
 }
+
 @Injectable({providedIn: 'root'})
-export class AppState {
-  todos: ToDo[] = [
-    {text: 'Demonstrate Components', done: false},
-    {text: 'Demonstrate Structural Directives', done: true},
-    {text: 'Demonstrate NgModules', done: false},
-    {text: 'Demonstrate zoneless change detection', done: false},
-    {text: 'Demonstrate internationalization', done: false},
+class TodoStore {
+  todos: Array<Todo> = [
+    new Todo('Demonstrate Components'),
+    new Todo('Demonstrate Structural Directives', true),
+    new Todo('Demonstrate NgModules'),
+    new Todo('Demonstrate zoneless change detection'),
+    new Todo('Demonstrate internationalization'),
   ];
 
-  static DEFAULT_TODO = {text: '', done: false};
-}
+  private getWithCompleted(completed: boolean) {
+    return this.todos.filter((todo: Todo) => todo.completed === completed);
+  }
 
-@Component({
-  selector: 'todo',
-  // TODO(misko): `[class.done]` and `[value]` should be `todo.done` not `todo && todo.todo.done`
-  // The reason for the guard is that template executes creation and binding together
-  // but NgForOf expects creation and binding separate.
-  template: `
-    <div>
-      <input type="checkbox" [value]="todo && todo.done" (click)="onCheckboxClick()">&ngsp;
-      <span [class.done]="todo && todo.done">{{todo && todo.text}}</span>&ngsp;
-      <button (click)="onArchiveClick()">archive</button>
-    </div>
-  `
-})
-export class TodoComponent {
-  @Input()
-  todo: ToDo = AppState.DEFAULT_TODO;
+  allCompleted() { return this.todos.length === this.getCompleted().length; }
 
-  @Output()
-  archive = new EventEmitter();
+  setAllTo(completed: boolean) { this.todos.forEach((t: Todo) => t.completed = completed); }
 
-  onCheckboxClick() { this.todo.done = !this.todo.done; }
+  removeCompleted() { this.todos = this.getWithCompleted(false); }
 
-  onArchiveClick() { this.archive.emit(this.todo); }
+  getRemaining() { return this.getWithCompleted(false); }
+
+  getCompleted() { return this.getWithCompleted(true); }
+
+  toggleCompletion(todo: Todo) { todo.completed = !todo.completed; }
+
+  remove(todo: Todo) { this.todos.splice(this.todos.indexOf(todo), 1); }
+
+  add(title: string) { this.todos.push(new Todo(title)); }
 }
 
 @Component({
   selector: 'todo-app',
+  // TODO(misko): make this work with `[(ngModel)]`
   template: `
-  <h1>ToDo Application</h1>
-  <div>
-    <todo *ngFor="let todo of appState.todos" [todo]="todo" (archive)="onArchive($event)"></todo>
-  </div>
-  <span>count: {{appState.todos.length}}.</span>
-  `
+  <section class="todoapp">
+    <header class="header">
+      <h1>todos</h1>
+      <input class="new-todo" placeholder="What needs to be done?" autofocus=""
+             [value]="newTodoText"
+             (keyup)="$event.code == 'Enter' ? addTodo() : newTodoText = $event.target.value">
+    </header>
+    <section *ngIf="todoStore.todos.length > 0" class="main">
+      <input *ngIf="todoStore.todos.length"
+             #toggleall class="toggle-all" type="checkbox"
+             [checked]="todoStore.allCompleted()"
+             (click)="todoStore.setAllTo(toggleall.checked)">
+      <ul class="todo-list">
+        <li *ngFor="let todo of todoStore.todos"
+            [class.completed]="todo.completed"
+            [class.editing]="todo.editing">
+          <div class="view">
+            <input class="toggle" type="checkbox"
+                   (click)="toggleCompletion(todo)"
+                   [checked]="todo.completed">
+            <label (dblclick)="editTodo(todo)">{{todo.title}}</label>
+            <button class="destroy" (click)="remove(todo)"></button>
+          </div>
+          <input *ngIf="todo.editing"
+                 class="edit" #editedtodo
+                 [value]="todo.title"
+                 (blur)="stopEditing(todo, editedtodo.value)"
+                 (keyup)="todo.title = $event.target.value"
+                 (keyup)="$event.code == 'Enter' && updateEditingTodo(todo, editedtodo.value)"
+                 (keyup)="$event.code == 'Escape' && cancelEditingTodo(todo)">
+        </li>
+      </ul>
+    </section>
+    <footer *ngIf="todoStore.todos.length > 0" class="footer">
+      <span class="todo-count">
+        <strong>{{todoStore.getRemaining().length}}</strong>
+        {{todoStore.getRemaining().length == 1 ? 'item' : 'items'}} left
+      </span>
+      <button *ngIf="todoStore.getCompleted().length > 0"
+              class="clear-completed"
+              (click)="removeCompleted()">
+        Clear completed
+      </button>
+    </footer>
+  </section>
+  `,
+  // TODO(misko): switch over to OnPush
+  // changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ToDoAppComponent {
-  public appState: AppState;
+class ToDoAppComponent {
+  newTodoText = '';
 
-  constructor(/**appState: AppState*/) {
-    // TODO(misko): Injection is broken because the compiler generates incorrect code.
-    this.appState = new AppState();
+  constructor(public todoStore: TodoStore) {}
+
+  stopEditing(todo: Todo, editedTitle: string) {
+    todo.title = editedTitle;
+    todo.editing = false;
   }
 
-  onArchive(item: ToDo) {
-    const todos = this.appState.todos;
-    todos.splice(todos.indexOf(item));
-    markDirty(this);
+  cancelEditingTodo(todo: Todo) { todo.editing = false; }
+
+  updateEditingTodo(todo: Todo, editedTitle: string) {
+    editedTitle = editedTitle.trim();
+    todo.editing = false;
+
+    if (editedTitle.length === 0) {
+      return this.todoStore.remove(todo);
+    }
+
+    todo.title = editedTitle;
+  }
+
+  editTodo(todo: Todo) { todo.editing = true; }
+
+  removeCompleted() { this.todoStore.removeCompleted(); }
+
+  toggleCompletion(todo: Todo) { this.todoStore.toggleCompletion(todo); }
+
+  remove(todo: Todo) { this.todoStore.remove(todo); }
+
+  addTodo() {
+    if (this.newTodoText.trim().length) {
+      this.todoStore.add(this.newTodoText);
+      this.newTodoText = '';
+    }
   }
 }
 
-// TODO(misko): This hack is here because common is not compiled with Ivy flag turned on.
-(CommonModule as any).ngInjectorDef = defineInjector({factory: () => new CommonModule});
-
-// TODO(misko): This hack is here because common is not compiled with Ivy flag turned on.
-(NgForOf as any).ngDirectiveDef = defineDirective({
-  type: NgForOf,
-  selectors: [['', 'ngFor', '', 'ngForOf', '']],
-  factory: () => new NgForOf(
-               injectViewContainerRef(), injectTemplateRef(),
-               // TODO(misko): inject does not work since it needs to be directiveInject
-               // inject(IterableDiffers, defaultIterableDiffers)
-               defaultIterableDiffers),
-  features: [NgOnChangesFeature({
-    ngForOf: 'ngForOf',
-    ngForTrackBy: 'ngForTrackBy',
-    ngForTemplate: 'ngForTemplate',
-  })],
-  inputs: {
-    ngForOf: 'ngForOf',
-    ngForTrackBy: 'ngForTrackBy',
-    ngForTemplate: 'ngForTemplate',
-  }
-});
-
-
-@NgModule({declarations: [ToDoAppComponent, TodoComponent], imports: [CommonModule]})
-export class ToDoAppModule {
+@NgModule({declarations: [ToDoAppComponent], imports: [CommonModule]})
+class ToDoAppModule {
 }
 
-renderComponent(ToDoAppComponent, {
-  // TODO(misko): This should run without injector.
-  injector: createInjector(ToDoAppModule)
-});
+// TODO(misko): create cleaner way to publish component into global location for tests.
+(window as any).toDoAppComponent = renderComponent(ToDoAppComponent);

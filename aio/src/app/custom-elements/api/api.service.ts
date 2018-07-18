@@ -14,14 +14,13 @@ export interface ApiItem {
   docType: string;
   stability: string;
   securityRisk: boolean;
-
-  show?: boolean;
 }
 
 export interface ApiSection {
+  path: string;
   name: string;
   title: string;
-  items: ApiItem[];
+  items: ApiItem[]|null;
 }
 
 @Injectable()
@@ -75,7 +74,7 @@ export class ApiService implements OnDestroy {
       .subscribe(
         sections => this.sectionsSubject.next(sections),
         (err: HttpErrorResponse) => {
-          // Todo: handle error
+          // TODO: handle error
           this.logger.error(err);
           throw err; // rethrow for now.
         }

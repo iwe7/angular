@@ -672,7 +672,7 @@ describe('ngc transformer command-line', () => {
         expect(mymoduleSource).toContain('args: [{ declarations: [] },] }');
         expect(mymoduleSource).not.toContain(`__metadata`);
         expect(mymoduleSource).toContain(`import { AClass } from './aclass';`);
-        expect(mymoduleSource).toContain(`{ type: AClass, }`);
+        expect(mymoduleSource).toContain(`{ type: AClass }`);
       });
     });
 
@@ -869,6 +869,40 @@ describe('ngc transformer command-line', () => {
         expect(mymoduleSource).toMatch(/ɵ0 = .*'test'/);
       });
 
+      it('should lower loadChildren', () => {
+        write('mymodule.ts', `
+          import {Component, NgModule} from '@angular/core';
+          import {RouterModule} from '@angular/router';
+          
+          export function foo(): string {
+            console.log('side-effect');
+            return 'test';
+          }
+
+          @Component({
+            selector: 'route',
+            template: 'route',
+          })
+          export class Route {}
+
+          @NgModule({
+            declarations: [Route],
+            imports: [
+              RouterModule.forRoot([
+                {path: '', pathMatch: 'full', component: Route, loadChildren: foo()}
+              ]),
+            ]
+          })
+          export class MyModule {}
+        `);
+        expect(compile()).toEqual(0);
+
+        const mymodulejs = path.resolve(outDir, 'mymodule.js');
+        const mymoduleSource = fs.readFileSync(mymodulejs, 'utf8');
+        expect(mymoduleSource).toContain('loadChildren: ɵ0');
+        expect(mymoduleSource).toMatch(/ɵ0 = .*foo\(\)/);
+      });
+
       it('should be able to lower supported expressions', () => {
         writeConfig(`{
           "extends": "./tsconfig-base.json",
@@ -975,7 +1009,8 @@ describe('ngc transformer command-line', () => {
         "angularCompilerOptions": {
           "flatModuleId": "flat_module",
           "flatModuleOutFile": "${outFile}",
-          "skipTemplateCodegen": true
+          "skipTemplateCodegen": true,
+          "enableResourceInlining": true
         },
         "files": ["public-api.ts"]
       }
@@ -1004,7 +1039,7 @@ describe('ngc transformer command-line', () => {
           ],
           exports: [
             FlatComponent,
-          ]
+          ],
         })
         export class FlatModule {
         }`);
@@ -1017,6 +1052,20 @@ describe('ngc transformer command-line', () => {
       expect(exitCode).toEqual(0);
       shouldExist('index.js');
       shouldExist('index.metadata.json');
+    });
+
+    it('should downlevel templates in flat module metadata', () => {
+      writeFlatModule('index.js');
+
+      const exitCode = main(['-p', path.join(basePath, 'tsconfig.json')], errorSpy);
+      expect(exitCode).toEqual(0);
+      shouldExist('index.js');
+      shouldExist('index.metadata.json');
+
+      const metadataPath = path.resolve(outDir, 'index.metadata.json');
+      const metadataSource = fs.readFileSync(metadataPath, 'utf8');
+      expect(metadataSource).not.toContain('templateUrl');
+      expect(metadataSource).toContain('<div>flat module component</div>');
     });
 
     describe('with tree example', () => {
@@ -1698,7 +1747,7 @@ describe('ngc transformer command-line', () => {
       const exitCode =
           main(['-p', path.join(basePath, 'src/tsconfig.json')], message => messages.push(message));
       expect(exitCode).toBe(1, 'Compile was expected to fail');
-      expect(messages[0]).toContain(['Tagged template expressions are not supported in metadata']);
+      expect(messages[0]).toContain('Tagged template expressions are not supported in metadata');
     });
 
     // Regression: #20076
@@ -1972,6 +2021,7 @@ describe('ngc transformer command-line', () => {
       const exitCode = main(['-p', path.join(basePath, 'tsconfig.json')]);
       expect(exitCode).toBe(0, 'Compile failed');
       expect(emittedFile('hello-world.js')).toContain('ngComponentDef');
+      expect(emittedFile('hello-world.js')).toContain('HelloWorldComponent_Factory');
     });
 
     it('should emit an injection of a string token', () => {
@@ -2188,7 +2238,7 @@ describe('ngc transformer command-line', () => {
           constructor(e: Existing|null) {}
         }
       `);
-      expect(source).toMatch(/ngInjectableDef.*return ..\(..\.inject\(Existing, null, 0\)/);
+      expect(source).toMatch(/ngInjectableDef.*return ..\(..\.inject\(Existing, 8\)/);
     });
 
     it('compiles a useFactory InjectableDef with skip-self dep', () => {
@@ -2208,7 +2258,7 @@ describe('ngc transformer command-line', () => {
           constructor(e: Existing) {}
         }
       `);
-      expect(source).toMatch(/ngInjectableDef.*return ..\(..\.inject\(Existing, undefined, 1\)/);
+      expect(source).toMatch(/ngInjectableDef.*return ..\(..\.inject\(Existing, 4\)/);
     });
 
     it('compiles a service that depends on a token', () => {
@@ -2370,5 +2420,32 @@ describe('ngc transformer command-line', () => {
       expect(moduleSource).not.toMatch(/inject\(i0\.Injector/);
       expect(moduleSource).toMatch(/inject\(i0\.INJECTOR/);
     });
+  });
+
+  it('libraries should not break strictMetadataEmit', () => {
+    // first only generate .d.ts / .js / .metadata.json files
+    writeConfig(`{
+        "extends": "./tsconfig-base.json",
+        "angularCompilerOptions": {
+          "skipTemplateCodegen": true,
+          "strictMetadataEmit": true,
+          "fullTemplateTypeCheck": true
+        },
+        "compilerOptions": {
+          "outDir": "lib"
+        },
+        "files": ["main.ts", "test.d.ts"]
+      }`);
+    write('main.ts', `
+        import {Test} from './test';
+        export const bar = Test.bar;
+    `);
+    write('test.d.ts', `
+        declare export class Test {
+          static bar: string;
+        }
+    `);
+    let exitCode = main(['-p', path.join(basePath, 'tsconfig.json')], errorSpy);
+    expect(exitCode).toEqual(0);
   });
 });

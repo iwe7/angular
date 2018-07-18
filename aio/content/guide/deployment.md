@@ -152,7 +152,7 @@ Install `source-map-explorer`:
 Build your app for production _including the source maps_
 
 <code-example language="none" class="code-shell">
-  ng build --prod --sourcemaps
+  ng build --prod --source-map
 </code-example>
 
 List the generated bundles in the `dist/` folder.
@@ -218,7 +218,7 @@ It serves build artifacts from memory instead for a faster development experienc
 <div class="l-sub-section">
 
 The output folder is  `dist/` by default.
-To output to a different folder, change the `outDir` in `.angular-cli.json`.
+To output to a different folder, change the `outputPath` in `angular.json`.
 
 </div>
 

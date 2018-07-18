@@ -55,6 +55,12 @@ function asyncValidator(expected: any, timeout = 0) {
         it('should throw when given an empty array',
            () => { expect(() => selectValueAccessor(dir, [])).toThrowError(); });
 
+        it('should throw when accessor is not provided as array', () => {
+          expect(() => selectValueAccessor(dir, {} as any[]))
+              .toThrowError(
+                  `Value accessor was not provided as an array for form control with unspecified name attribute`);
+        });
+
         it('should return the default value accessor when no other provided',
            () => { expect(selectValueAccessor(dir, [defaultAccessor])).toEqual(defaultAccessor); });
 
@@ -86,14 +92,14 @@ function asyncValidator(expected: any, timeout = 0) {
         });
 
         it('should return custom accessor when provided', () => {
-          const customAccessor = new SpyValueAccessor();
+          const customAccessor: ControlValueAccessor = new SpyValueAccessor() as any;
           const checkboxAccessor = new CheckboxControlValueAccessor(null !, null !);
           expect(selectValueAccessor(dir, <any>[defaultAccessor, customAccessor, checkboxAccessor]))
               .toEqual(customAccessor);
         });
 
         it('should return custom accessor when provided with select multiple', () => {
-          const customAccessor = new SpyValueAccessor();
+          const customAccessor: ControlValueAccessor = new SpyValueAccessor() as any;
           const selectMultipleAccessor = new SelectMultipleControlValueAccessor(null !, null !);
           expect(selectValueAccessor(
                      dir, <any>[defaultAccessor, customAccessor, selectMultipleAccessor]))

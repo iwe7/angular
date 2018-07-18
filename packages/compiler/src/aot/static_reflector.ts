@@ -28,7 +28,7 @@ const IGNORE = {
 
 const USE_VALUE = 'useValue';
 const PROVIDE = 'provide';
-const REFERENCE_SET = new Set([USE_VALUE, 'useFactory', 'data', 'id']);
+const REFERENCE_SET = new Set([USE_VALUE, 'useFactory', 'data', 'id', 'loadChildren']);
 const TYPEGUARD_POSTFIX = 'TypeGuard';
 const USE_IF = 'UseIf';
 
@@ -49,10 +49,14 @@ export class StaticReflector implements CompileReflector {
   private staticCache = new Map<StaticSymbol, string[]>();
   private conversionMap = new Map<StaticSymbol, (context: StaticSymbol, args: any[]) => any>();
   private resolvedExternalReferences = new Map<string, StaticSymbol>();
-  private injectionToken: StaticSymbol;
-  private opaqueToken: StaticSymbol;
-  ROUTES: StaticSymbol;
-  private ANALYZE_FOR_ENTRY_COMPONENTS: StaticSymbol;
+  // TODO(issue/24571): remove '!'.
+  private injectionToken !: StaticSymbol;
+  // TODO(issue/24571): remove '!'.
+  private opaqueToken !: StaticSymbol;
+  // TODO(issue/24571): remove '!'.
+  ROUTES !: StaticSymbol;
+  // TODO(issue/24571): remove '!'.
+  private ANALYZE_FOR_ENTRY_COMPONENTS !: StaticSymbol;
   private annotationForParentClassWithSummaryKind =
       new Map<CompileSummaryKind, MetadataFactory<any>[]>();
 
@@ -163,7 +167,9 @@ export class StaticReflector implements CompileReflector {
       let ownAnnotations: any[] = [];
       if (classMetadata['decorators']) {
         ownAnnotations = simplify(type, classMetadata['decorators']);
-        annotations.push(...ownAnnotations);
+        if (ownAnnotations) {
+          annotations.push(...ownAnnotations);
+        }
       }
       if (parentType && !this.summaryResolver.isLibraryFile(type.filePath) &&
           this.summaryResolver.isLibraryFile(parentType.filePath)) {

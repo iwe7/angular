@@ -1,10 +1,8 @@
-/** @stable */
 export declare function async(fn: Function): (done: any) => any;
 
 /** @experimental */
 export declare function cleanupDocument(): void;
 
-/** @stable */
 export declare class ComponentFixture<T> {
     changeDetectorRef: ChangeDetectorRef;
     componentInstance: T;
@@ -47,7 +45,6 @@ export declare function flushMicrotasks(): void;
 /** @experimental */
 export declare function getTestBed(): TestBed;
 
-/** @stable */
 export declare function inject(tokens: any[], fn: Function): () => any;
 
 /** @experimental */
@@ -56,17 +53,21 @@ export declare class InjectSetupWrapper {
     inject(tokens: any[], fn: Function): () => any;
 }
 
+export declare function jasmineAwait(fn: () => Promise<any>): (done: {
+    (): void;
+    fail: (message?: Error | string) => void;
+}) => void;
+
 /** @experimental */
 export declare type MetadataOverride<T> = {
-    add?: T;
-    remove?: T;
-    set?: T;
+    add?: Partial<T>;
+    remove?: Partial<T>;
+    set?: Partial<T>;
 };
 
 /** @experimental */
 export declare function resetFakeAsyncZone(): void;
 
-/** @stable */
 export declare class TestBed implements Injector {
     ngModule: Type<any> | Type<any>[];
     platform: PlatformRef;
@@ -77,12 +78,12 @@ export declare class TestBed implements Injector {
     }): void;
     configureTestingModule(moduleDef: TestModuleMetadata): void;
     createComponent<T>(component: Type<T>): ComponentFixture<T>;
-    deprecatedOverrideProvider(token: any, provider: {
-        useValue: any;
-    }): void;
     /** @deprecated */ deprecatedOverrideProvider(token: any, provider: {
         useFactory: Function;
         deps: any[];
+    }): void;
+    deprecatedOverrideProvider(token: any, provider: {
+        useValue: any;
     }): void;
     execute(tokens: any[], fn: Function, context?: any): any;
     get(token: any, notFoundValue?: any): any;
@@ -122,11 +123,11 @@ export declare class TestBed implements Injector {
     static overrideModule(ngModule: Type<any>, override: MetadataOverride<NgModule>): typeof TestBed;
     static overridePipe(pipe: Type<any>, override: MetadataOverride<Pipe>): typeof TestBed;
     static overrideProvider(token: any, provider: {
-        useFactory: Function;
-        deps: any[];
+        useValue: any;
     }): typeof TestBed;
     static overrideProvider(token: any, provider: {
-        useValue: any;
+        useFactory: Function;
+        deps: any[];
     }): typeof TestBed;
     static overrideTemplate(component: Type<any>, template: string): typeof TestBed;
     static overrideTemplateUsingTestingModule(component: Type<any>, template: string): typeof TestBed;

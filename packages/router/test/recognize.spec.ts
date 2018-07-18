@@ -748,6 +748,14 @@ describe('recognize', () => {
         expect(Object.isFrozen(s.root.queryParams)).toBeTruthy();
       });
     });
+
+    it('should not freeze UrlTree query params', () => {
+      const url = tree('a?q=11');
+      recognize(RootComponent, [{path: 'a', component: ComponentA}], url, 'a?q=11')
+          .subscribe((s: RouterStateSnapshot) => {
+            expect(Object.isFrozen(url.queryParams)).toBe(false);
+          });
+    });
   });
 
   describe('fragment', () => {
@@ -791,7 +799,7 @@ function checkActivatedRoute(
   } else {
     expect(actual.url.map(s => s.path).join('/')).toEqual(url);
     expect(actual.params).toEqual(params);
-    expect(actual.component).toBe(cmp);
+    expect(actual.component as any).toBe(cmp);
     expect(actual.outlet).toEqual(outlet);
   }
 }

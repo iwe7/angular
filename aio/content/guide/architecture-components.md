@@ -8,9 +8,10 @@ A _component_ controls a patch of screen called a *view*. For example, individua
 * The list of heroes.
 * The hero editor.
 
-You define a component's application logic&mdash;what it does to support the view&mdash;inside a class. The class interacts with the view through an API of properties and methods.
+You define a component's application logic&mdash;what it does to support the view&mdash;inside a class.
+The class interacts with the view through an API of properties and methods.
 
-For example, the `HeroListComponent` has a `heroes` property that returns an array of heroes that it acquires from a service. `HeroListComponent` also has a `selectHero()` method that sets a `selectedHero` property when the user clicks to choose a hero from that list.
+For example, the `HeroListComponent` has a `heroes` property that holds an array of heroes. It also has a `selectHero()` method that sets a `selectedHero` property when the user clicks to choose a hero from that list. The component acquires the heroes from a service, which is a TypeScript [parameter property[(http://www.typescriptlang.org/docs/handbook/classes.html#parameter-properties) on the constructor. The service is provided to the component through the dependency injection system.
 
 <code-example path="architecture/src/app/hero-list.component.ts" linenums="false" title="src/app/hero-list.component.ts (class)" region="class"></code-example>
 
@@ -22,7 +23,7 @@ Angular creates, updates, and destroys components as the user moves through the 
 
 <img src="generated/images/guide/architecture/metadata.png" alt="Metadata" class="left">
 
-The `@Component` decorator identifies the class immediately below it as a component class, and specifies its metadata. In the example code below, you can see that `HeroListComponent` is just a class, with no special Angular notation or syntax at all. It's not a component until mark it as one with the `@Component` decorator.
+The `@Component` decorator identifies the class immediately below it as a component class, and specifies its metadata. In the example code below, you can see that `HeroListComponent` is just a class, with no special Angular notation or syntax at all. It's not a component until you mark it as one with the `@Component` decorator.
 
 The metadata for a component tells Angular where to get the major building blocks it needs to create and present the component and its view. In particular, it associates a _template_ with the component, either directly with inline code, or by reference. Together, the component and its template describe a _view_.
 
@@ -39,8 +40,7 @@ Angular inserts an instance of the `HeroListComponent` view between those tags.
 
 * `templateUrl`: The module-relative address of this component's HTML template. Alternatively, you can provide the HTML template inline, as the value of the `template` property. This template defines the component's _host view_.
 
-* `providers`: An array of **dependency injection providers** for services that the component requires. In the example, this tells Angular that the component's constructor requires a `HeroService` instance
-in order to get the list of heroes to display.
+* `providers`: An array of **dependency injection providers** for services that the component requires. In the example, this tells Angular how to provide the `HeroService` instance that the component's constructor uses to get the list of heroes to display.  
 
 <hr/>
 
@@ -76,7 +76,7 @@ This template uses typical HTML elements like `<h2>` and  `<p>`, and also includ
 
 Without a framework, you would be responsible for pushing data values into the HTML controls and turning user responses into actions and value updates. Writing such push/pull logic by hand is tedious, error-prone, and a nightmare to read, as any experienced jQuery programmer can attest.
 
-Angular supports *two-way data binding*, a mechanism for coordinating parts of a template with parts of a component. Add binding markup to the template HTML to tell Angular how to connect both sides. 
+Angular supports *two-way data binding*, a mechanism for coordinating parts of a template with parts of a component. Add binding markup to the template HTML to tell Angular how to connect both sides.
 
 The following diagram shows the four forms of data binding markup. Each form has a direction&mdash;to the DOM, from the DOM, or in both directions.
 

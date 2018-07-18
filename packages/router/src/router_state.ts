@@ -19,9 +19,14 @@ import {Tree, TreeNode} from './utils/tree';
 
 
 /**
- * @whatItDoes Represents the state of the router.
+ * @description
  *
- * @howToUse
+ * Represents the state of the router.
+ *
+ * RouterState is a tree of activated routes. Every node in this tree knows about the "consumed" URL
+ * segments, the extracted parameters, and the resolved data.
+ *
+ * ### Example
  *
  * ```
  * @Component({templateUrl:'template.html'})
@@ -36,13 +41,9 @@ import {Tree, TreeNode} from './utils/tree';
  * }
  * ```
  *
- * @description
- * RouterState is a tree of activated routes. Every node in this tree knows about the "consumed" URL
- * segments, the extracted parameters, and the resolved data.
+ * See `ActivatedRoute` for more information.
  *
- * See {@link ActivatedRoute} for more information.
  *
- * @stable
  */
 export class RouterState extends Tree<ActivatedRoute> {
   /** @internal */
@@ -84,11 +85,10 @@ export function createEmptyStateSnapshot(
 }
 
 /**
- * @whatItDoes Contains the information about a route associated with a component loaded in an
- * outlet.
- * An `ActivatedRoute` can also be used to traverse the router state tree.
+ * @description
  *
- * @howToUse
+ * Contains the information about a route associated with a component loaded in an
+ * outlet.  An `ActivatedRoute` can also be used to traverse the router state tree.
  *
  * ```
  * @Component({...})
@@ -102,19 +102,23 @@ export function createEmptyStateSnapshot(
  * }
  * ```
  *
- * @stable
+ *
  */
 export class ActivatedRoute {
   /** The current snapshot of this route */
-  snapshot: ActivatedRouteSnapshot;
+  // TODO(issue/24571): remove '!'.
+  snapshot !: ActivatedRouteSnapshot;
   /** @internal */
   _futureSnapshot: ActivatedRouteSnapshot;
   /** @internal */
-  _routerState: RouterState;
+  // TODO(issue/24571): remove '!'.
+  _routerState !: RouterState;
   /** @internal */
-  _paramMap: Observable<ParamMap>;
+  // TODO(issue/24571): remove '!'.
+  _paramMap !: Observable<ParamMap>;
   /** @internal */
-  _queryParamMap: Observable<ParamMap>;
+  // TODO(issue/24571): remove '!'.
+  _queryParamMap !: Observable<ParamMap>;
 
   /** @internal */
   constructor(
@@ -228,12 +232,11 @@ function flattenInherited(pathFromRoot: ActivatedRouteSnapshot[]): Inherited {
 }
 
 /**
- * @whatItDoes Contains the information about a route associated with a component loaded in an
- * outlet
- * at a particular moment in time. ActivatedRouteSnapshot can also be used to traverse the router
- * state tree.
+ * @description
  *
- * @howToUse
+ * Contains the information about a route associated with a component loaded in an
+ * outlet at a particular moment in time. ActivatedRouteSnapshot can also be used to
+ * traverse the router state tree.
  *
  * ```
  * @Component({templateUrl:'./my-component.html'})
@@ -246,7 +249,7 @@ function flattenInherited(pathFromRoot: ActivatedRouteSnapshot[]): Inherited {
  * }
  * ```
  *
- * @stable
+ *
  */
 export class ActivatedRouteSnapshot {
   /** The configuration used to match this route **/
@@ -258,13 +261,17 @@ export class ActivatedRouteSnapshot {
   /** @internal */
   _resolve: ResolveData;
   /** @internal */
-  _resolvedData: Data;
+  // TODO(issue/24571): remove '!'.
+  _resolvedData !: Data;
   /** @internal */
-  _routerState: RouterStateSnapshot;
+  // TODO(issue/24571): remove '!'.
+  _routerState !: RouterStateSnapshot;
   /** @internal */
-  _paramMap: ParamMap;
+  // TODO(issue/24571): remove '!'.
+  _paramMap !: ParamMap;
   /** @internal */
-  _queryParamMap: ParamMap;
+  // TODO(issue/24571): remove '!'.
+  _queryParamMap !: ParamMap;
 
   /** @internal */
   constructor(
@@ -326,9 +333,14 @@ export class ActivatedRouteSnapshot {
 }
 
 /**
- * @whatItDoes Represents the state of the router at a moment in time.
+ * @description
  *
- * @howToUse
+ * Represents the state of the router at a moment in time.
+ *
+ * This is a tree of activated route snapshots. Every node in this tree knows about
+ * the "consumed" URL segments, the extracted parameters, and the resolved data.
+ *
+ * ### Example
  *
  * ```
  * @Component({templateUrl:'template.html'})
@@ -344,11 +356,7 @@ export class ActivatedRouteSnapshot {
  * }
  * ```
  *
- * @description
- * RouterStateSnapshot is a tree of activated route snapshots. Every node in this tree knows about
- * the "consumed" URL segments, the extracted parameters, and the resolved data.
  *
- * @stable
  */
 export class RouterStateSnapshot extends Tree<ActivatedRouteSnapshot> {
   /** @internal */

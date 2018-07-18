@@ -33,36 +33,27 @@ class TurboEngine extends Engine {}
 const CARS = new InjectionToken<Car[]>('Cars');
 @Injectable()
 class Car {
-  engine: Engine;
-  constructor(engine: Engine) { this.engine = engine; }
+  constructor(public engine: Engine) {}
 }
 
 @Injectable()
 class CarWithOptionalEngine {
-  engine: Engine;
-  constructor(@Optional() engine: Engine) { this.engine = engine; }
+  constructor(@Optional() public engine: Engine) {}
 }
 
 @Injectable()
 class CarWithDashboard {
-  engine: Engine;
-  dashboard: Dashboard;
-  constructor(engine: Engine, dashboard: Dashboard) {
-    this.engine = engine;
-    this.dashboard = dashboard;
-  }
+  constructor(public engine: Engine, public dashboard: Dashboard) {}
 }
 
 @Injectable()
 class SportsCar extends Car {
-  engine: Engine;
   constructor(engine: Engine) { super(engine); }
 }
 
 @Injectable()
 class CarWithInject {
-  engine: Engine;
-  constructor(@Inject(TurboEngine) engine: Engine) { this.engine = engine; }
+  constructor(@Inject(TurboEngine) public engine: Engine) {}
 }
 
 @Injectable()
@@ -82,8 +73,9 @@ class SomeComp {
 
 @Directive({selector: '[someDir]'})
 class SomeDirective {
+  // TODO(issue/24571): remove '!'.
   @HostBinding('title') @Input()
-  someDir: string;
+  someDir !: string;
 }
 
 @Pipe({name: 'somePipe'})
@@ -745,7 +737,7 @@ function declareTests({useJit}: {useJit: boolean}) {
         const injector = createInjector([CarWithOptionalEngine]);
 
         const car = injector.get(CarWithOptionalEngine);
-        expect(car.engine).toEqual(null);
+        expect(car.engine).toBeNull();
       });
 
       it('should flatten passed-in providers', () => {
@@ -882,6 +874,35 @@ function declareTests({useJit}: {useJit: boolean}) {
           }
 
           expect(createModule(MyModule).injector.get('eager1')).toBe('v1: v2');
+        });
+
+        it('eager providers should get initialized only once', () => {
+          @Injectable()
+          class MyService1 {
+            public innerService: MyService2;
+            constructor(injector: Injector) {
+              // Create MyService2 before it it's initialized by TestModule.
+              this.innerService = injector.get(MyService2);
+            }
+          }
+
+          @Injectable()
+          class MyService2 {
+            constructor() {}
+          }
+
+          @NgModule({
+            providers: [MyService1, MyService2],
+          })
+          class TestModule {
+            constructor(public service1: MyService1, public service2: MyService2) {}
+          }
+
+          const moduleRef = createModule(TestModule, injector);
+          const module = moduleRef.instance;
+
+          // MyService2 should not get initialized twice.
+          expect(module.service1.innerService).toBe(module.service2);
         });
       });
 

@@ -7,16 +7,19 @@
  */
 
 import {browserDetection} from '@angular/platform-browser/testing/src/browser_util';
+
 import {ChangeDetectionStrategy, ChangeDetectorRef, Component, ContentChild, ContentChildren, Directive, HostBinding, HostListener, Injectable, Input, NgModule, OnDestroy, Optional, Pipe, PipeTransform, QueryList, SimpleChanges, TemplateRef, ViewChild, ViewChildren, ViewContainerRef} from '../../../src/core';
 import * as $r3$ from '../../../src/core_render3_private_export';
+import {AttributeMarker} from '../../../src/render3';
+import {ComponentDefInternal, InitialStylingFlags} from '../../../src/render3/interfaces/definition';
 import {ComponentFixture, renderComponent, toHtml} from '../render_util';
+
 
 /// See: `normative.md`
 describe('elements', () => {
-  // Saving type as $boolean$, etc to simplify testing for compiler, as types aren't saved
-  type $boolean$ = boolean;
+  // Saving type as $any$, etc to simplify testing for compiler, as types aren't saved
   type $any$ = any;
-  type $number$ = number;
+  type $RenderFlags$ = $r3$.ɵRenderFlags;
 
   it('should translate DOM structure', () => {
     type $MyComponent$ = MyComponent;
@@ -34,8 +37,8 @@ describe('elements', () => {
         type: MyComponent,
         selectors: [['my-component']],
         factory: () => new MyComponent(),
-        template: function(ctx: $MyComponent$, cm: $boolean$) {
-          if (cm) {
+        template: function(rf: $RenderFlags$, ctx: $MyComponent$) {
+          if (rf & 1) {
             $r3$.ɵE(0, 'div', $e0_attrs$);
             $r3$.ɵT(1, 'Hello ');
             $r3$.ɵE(2, 'b');
@@ -85,22 +88,26 @@ describe('elements', () => {
         type: LocalRefComp,
         selectors: [['local-ref-comp']],
         factory: function LocalRefComp_Factory() { return new LocalRefComp(); },
-        template: function LocalRefComp_Template(ctx: $LocalRefComp$, cm: $boolean$) {
-          if (cm) {
-            $r3$.ɵE(0, 'div', $e0_attrs$, $e0_locals$);
-            $r3$.ɵe();
+        template: function LocalRefComp_Template(rf: $RenderFlags$, ctx: $LocalRefComp$) {
+          let $tmp$: any;
+          let $tmp_2$: any;
+          if (rf & 1) {
+            $r3$.ɵEe(0, 'div', $e0_attrs$, $e0_locals$);
             $r3$.ɵT(3);
           }
-          const $tmp$ = $r3$.ɵld(1) as any;
-          const $tmp_2$ = $r3$.ɵld(2) as any;
-          $r3$.ɵt(3, $r3$.ɵi2(' ', $tmp$.value, ' - ', $tmp_2$.tagName, ''));
+          if (rf & 2) {
+            $tmp$ = $r3$.ɵld(1);
+            $tmp_2$ = $r3$.ɵld(2);
+            $r3$.ɵt(3, $r3$.ɵi2(' ', $tmp$.value, ' - ', $tmp_2$.tagName, ''));
+          }
         }
       });
       // /NORMATIVE
     }
 
     // NON-NORMATIVE
-    LocalRefComp.ngComponentDef.directiveDefs = () => [Dir.ngDirectiveDef];
+    (LocalRefComp.ngComponentDef as ComponentDefInternal<any>).directiveDefs =
+        () => [Dir.ngDirectiveDef];
     // /NON-NORMATIVE
 
     const fixture = new ComponentFixture(LocalRefComp);
@@ -125,8 +132,8 @@ describe('elements', () => {
         type: ListenerComp,
         selectors: [['listener-comp']],
         factory: function ListenerComp_Factory() { return new ListenerComp(); },
-        template: function ListenerComp_Template(ctx: $ListenerComp$, cm: $boolean$) {
-          if (cm) {
+        template: function ListenerComp_Template(rf: $RenderFlags$, ctx: $ListenerComp$) {
+          if (rf & 1) {
             $r3$.ɵE(0, 'button');
             $r3$.ɵL('click', function ListenerComp_click_Handler() { return ctx.onClick(); });
             $r3$.ɵL('keypress', function ListenerComp_keypress_Handler($event: $any$) {
@@ -145,6 +152,60 @@ describe('elements', () => {
     expect(toHtml(listenerComp)).toEqual('<button>Click</button>');
   });
 
+  it('should support namespaced attributes', () => {
+    type $MyComponent$ = MyComponent;
+
+    // Important: keep arrays outside of function to not create new instances.
+    const $e0_attrs$ = [
+      // class="my-app"
+      'class',
+      'my-app',
+      // foo:bar="baz"
+      AttributeMarker.NamespaceURI,
+      'http://someuri/foo',
+      'foo:bar',
+      'baz',
+      // title="Hello"
+      'title',
+      'Hello',
+      // foo:qux="quacks"
+      AttributeMarker.NamespaceURI,
+      'http://someuri/foo',
+      'foo:qux',
+      'quacks',
+    ];
+
+    @Component({
+      selector: 'my-component',
+      template:
+          `<div xmlns:foo="http://someuri/foo" class="my-app" foo:bar="baz" title="Hello" foo:qux="quacks">Hello <b>World</b>!</div>`
+    })
+    class MyComponent {
+      // NORMATIVE
+      static ngComponentDef = $r3$.ɵdefineComponent({
+        type: MyComponent,
+        selectors: [['my-component']],
+        factory: () => new MyComponent(),
+        template: function(rf: $RenderFlags$, ctx: $MyComponent$) {
+          if (rf & 1) {
+            $r3$.ɵE(0, 'div', $e0_attrs$);
+            $r3$.ɵT(1, 'Hello ');
+            $r3$.ɵE(2, 'b');
+            $r3$.ɵT(3, 'World');
+            $r3$.ɵe();
+            $r3$.ɵT(4, '!');
+            $r3$.ɵe();
+          }
+        }
+      });
+      // /NORMATIVE
+    }
+
+    expect(toHtml(renderComponent(MyComponent)))
+        .toEqual(
+            '<div class="my-app" foo:bar="baz" foo:qux="quacks" title="Hello">Hello <b>World</b>!</div>');
+  });
+
   describe('bindings', () => {
     it('should bind to property', () => {
       type $MyComponent$ = MyComponent;
@@ -157,12 +218,13 @@ describe('elements', () => {
           type: MyComponent,
           selectors: [['my-component']],
           factory: function MyComponent_Factory() { return new MyComponent(); },
-          template: function MyComponent_Template(ctx: $MyComponent$, cm: $boolean$) {
-            if (cm) {
-              $r3$.ɵE(0, 'div');
-              $r3$.ɵe();
+          template: function MyComponent_Template(rf: $RenderFlags$, ctx: $MyComponent$) {
+            if (rf & 1) {
+              $r3$.ɵEe(0, 'div');
             }
-            $r3$.ɵp(0, 'id', $r3$.ɵb(ctx.someProperty));
+            if (rf & 2) {
+              $r3$.ɵp(0, 'id', $r3$.ɵb(ctx.someProperty));
+            }
           }
         });
         // /NORMATIVE
@@ -187,12 +249,13 @@ describe('elements', () => {
           type: MyComponent,
           selectors: [['my-component']],
           factory: function MyComponent_Factory() { return new MyComponent(); },
-          template: function MyComponent_Template(ctx: $MyComponent$, cm: $boolean$) {
-            if (cm) {
-              $r3$.ɵE(0, 'div');
-              $r3$.ɵe();
+          template: function MyComponent_Template(rf: $RenderFlags$, ctx: $MyComponent$) {
+            if (rf & 1) {
+              $r3$.ɵEe(0, 'div');
             }
-            $r3$.ɵa(0, 'title', $r3$.ɵb(ctx.someAttribute));
+            if (rf & 2) {
+              $r3$.ɵa(0, 'title', $r3$.ɵb(ctx.someAttribute));
+            }
           }
         });
         // /NORMATIVE
@@ -207,6 +270,7 @@ describe('elements', () => {
     });
 
     it('should bind to a specific class', () => {
+      const c1: (string | InitialStylingFlags | boolean)[] = ['foo'];
       type $MyComponent$ = MyComponent;
 
       @Component({selector: 'my-component', template: `<div [class.foo]="someFlag"></div>`})
@@ -217,12 +281,16 @@ describe('elements', () => {
           type: MyComponent,
           selectors: [['my-component']],
           factory: function MyComponent_Factory() { return new MyComponent(); },
-          template: function MyComponent_Template(ctx: $MyComponent$, cm: $boolean$) {
-            if (cm) {
+          template: function MyComponent_Template(rf: $RenderFlags$, ctx: $MyComponent$) {
+            if (rf & 1) {
               $r3$.ɵE(0, 'div');
+              $r3$.ɵs(null, c1);
               $r3$.ɵe();
             }
-            $r3$.ɵkn(0, 'foo', $r3$.ɵb(ctx.someFlag));
+            if (rf & 2) {
+              $r3$.ɵcp(0, 0, ctx.someFlag);
+              $r3$.ɵsa(0);
+            }
           }
         });
         // /NORMATIVE
@@ -239,6 +307,7 @@ describe('elements', () => {
     it('should bind to a specific style', () => {
       type $MyComponent$ = MyComponent;
 
+      const c0 = ['color', 'width'];
       @Component({
         selector: 'my-component',
         template: `<div [style.color]="someColor" [style.width.px]="someWidth"></div>`
@@ -251,13 +320,17 @@ describe('elements', () => {
           type: MyComponent,
           selectors: [['my-component']],
           factory: function MyComponent_Factory() { return new MyComponent(); },
-          template: function MyComponent_Template(ctx: $MyComponent$, cm: $boolean$) {
-            if (cm) {
+          template: function MyComponent_Template(rf: $RenderFlags$, ctx: $MyComponent$) {
+            if (rf & 1) {
               $r3$.ɵE(0, 'div');
+              $r3$.ɵs(c0);
               $r3$.ɵe();
             }
-            $r3$.ɵsn(0, 'color', $r3$.ɵb(ctx.someColor));
-            $r3$.ɵsn(0, 'width', $r3$.ɵb(ctx.someWidth), 'px');
+            if (rf & 2) {
+              $r3$.ɵsp(0, 0, ctx.someColor);
+              $r3$.ɵsp(0, 1, ctx.someWidth, 'px');
+              $r3$.ɵsa(0);
+            }
           }
         });
         // /NORMATIVE
@@ -283,9 +356,8 @@ describe('elements', () => {
     it('should bind to many and keep order', () => {
       type $MyComponent$ = MyComponent;
 
-      // NORMATIVE
-      const $e0_attrs$ = ['style', 'color: red;'];
-      // /NORMATIVE
+      const c0 = ['color', InitialStylingFlags.VALUES_MODE, 'color', 'red'];
+      const c1 = ['foo'];
 
       @Component({
         selector: 'my-component',
@@ -299,13 +371,17 @@ describe('elements', () => {
           type: MyComponent,
           selectors: [['my-component']],
           factory: function MyComponent_Factory() { return new MyComponent(); },
-          template: function MyComponent_Template(ctx: $MyComponent$, cm: $boolean$) {
-            if (cm) {
-              $r3$.ɵE(0, 'div', $e0_attrs$);
+          template: function MyComponent_Template(rf: $RenderFlags$, ctx: $MyComponent$) {
+            if (rf & 1) {
+              $r3$.ɵE(0, 'div');
+              $r3$.ɵs(c0, c1);
               $r3$.ɵe();
             }
-            $r3$.ɵp(0, 'id', $r3$.ɵb(ctx.someString + 1));
-            $r3$.ɵkn(0, 'foo', $r3$.ɵb(ctx.someString == 'initial'));
+            if (rf & 2) {
+              $r3$.ɵp(0, 'id', $r3$.ɵb(ctx.someString + 1));
+              $r3$.ɵcp(0, 0, ctx.someString == 'initial');
+              $r3$.ɵsa(0);
+            }
           }
         });
         // /NORMATIVE
@@ -333,13 +409,16 @@ describe('elements', () => {
           type: StyleComponent,
           selectors: [['style-comp']],
           factory: function StyleComponent_Factory() { return new StyleComponent(); },
-          template: function StyleComponent_Template(ctx: $StyleComponent$, cm: $boolean$) {
-            if (cm) {
+          template: function StyleComponent_Template(rf: $RenderFlags$, ctx: $StyleComponent$) {
+            if (rf & 1) {
               $r3$.ɵE(0, 'div');
+              $r3$.ɵs();
               $r3$.ɵe();
             }
-            $r3$.ɵk(0, $r3$.ɵb(ctx.classExp));
-            $r3$.ɵs(0, $r3$.ɵb(ctx.styleExp));
+            if (rf & 2) {
+              $r3$.ɵsm(0, ctx.styleExp, ctx.classExp);
+              $r3$.ɵsa(0);
+            }
           }
         });
         // /NORMATIVE

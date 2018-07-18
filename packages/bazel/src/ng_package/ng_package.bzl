@@ -18,54 +18,76 @@ load("@build_bazel_rules_nodejs//:internal/npm_package/npm_package.bzl",
 load("@build_bazel_rules_nodejs//:internal/node.bzl", "sources_aspect")
 load("//packages/bazel/src:esm5.bzl", "esm5_outputs_aspect", "flatten_esm5", "esm5_root_dir")
 
-# TODO(alexeagle): this list is incomplete, add more as material ramps up
-WELL_KNOWN_GLOBALS = {
-    "@angular/upgrade": "ng.upgrade",
-    "@angular/upgrade/static": "ng.upgrade.static",
-    "@angular/forms": "ng.forms",
-    "@angular/core/testing": "ng.core.testing",
-    "@angular/core": "ng.core",
-    "@angular/platform-server/testing": "ng.platformServer.testing",
-    "@angular/platform-server": "ng.platformServer",
-    "@angular/platform-webworker-dynamic": "ng.platformWebworkerDynamic",
-    "@angular/platform-webworker": "ng.platformWebworker",
-    "@angular/common/testing": "ng.common.testing",
-    "@angular/common": "ng.common",
-    "@angular/common/http/testing": "ng.common.http.testing",
-    "@angular/common/http": "ng.common.http",
-    "@angular/elements": "ng.elements",
-    "@angular/http/testing": "ng.http.testing",
-    "@angular/http": "ng.http",
-    "@angular/platform-browser-dynamic/testing": "ng.platformBrowserDynamic.testing",
-    "@angular/platform-browser-dynamic": "ng.platformBrowserDynamic",
-    "@angular/compiler/testing": "ng.compiler.testing",
-    "@angular/compiler": "ng.compiler",
-    "@angular/animations": "ng.animations",
-    "@angular/animations/browser/testing": "ng.animations.browser.testing",
-    "@angular/animations/browser": "ng.animations.browser",
-    "@angular/service-worker/config": "ng.serviceWorker.config",
-    "@angular/service-worker": "ng.serviceWorker",
-    "@angular/platform-browser/testing": "ng.platformBrowser.testing",
-    "@angular/platform-browser": "ng.platformBrowser",
-    "@angular/platform-browser/animations": "ng.platformBrowser.animations",
-    "@angular/router/upgrade": "ng.router.upgrade",
-    "@angular/router/testing": "ng.router.testing",
-    "@angular/router": "ng.router",
-    "rxjs": "rxjs",
-    "rxjs/operators": "rxjs.operators",
-}
+# Convert from some-dash-case to someCamelCase
+def _convert_dash_case_to_camel_case(s):
+  parts = s.split("-")
+  # First letter in the result is always unchanged
+  return s[0] + "".join([p.title() for p in parts])[1:]
 
+# Convert from a package name on npm to an identifier that's a legal global symbol
+#  @angular/core -> ng.core
+#  @angular/platform-browser-dynamic/testing -> ng.platformBrowserDynamic.testing
+def _global_name(package_name):
+  # strip npm scoped package qualifier
+  start = 1 if package_name.startswith("@") else 0
+  parts = package_name[start:].split("/")
+  result_parts = []
+  for p in parts:
+    # Special case for angular's short name
+    if p == "angular":
+      result_parts.append("ng")
+    else:
+      result_parts.append(_convert_dash_case_to_camel_case(p))
+  return ".".join(result_parts)
 
-def _rollup(ctx, rollup_config, entry_point, inputs, js_output, format = "es"):
+WELL_KNOWN_GLOBALS = { p: _global_name(p) for p in [
+    "@angular/upgrade",
+    "@angular/upgrade/static",
+    "@angular/forms",
+    "@angular/core/testing",
+    "@angular/core",
+    "@angular/platform-server/testing",
+    "@angular/platform-server",
+    "@angular/platform-webworker-dynamic",
+    "@angular/platform-webworker",
+    "@angular/common/testing",
+    "@angular/common",
+    "@angular/common/http/testing",
+    "@angular/common/http",
+    "@angular/elements",
+    "@angular/http/testing",
+    "@angular/http",
+    "@angular/platform-browser-dynamic/testing",
+    "@angular/platform-browser-dynamic",
+    "@angular/compiler/testing",
+    "@angular/compiler",
+    "@angular/animations",
+    "@angular/animations/browser/testing",
+    "@angular/animations/browser",
+    "@angular/service-worker/config",
+    "@angular/service-worker",
+    "@angular/platform-browser/testing",
+    "@angular/platform-browser",
+    "@angular/platform-browser/animations",
+    "@angular/router/upgrade",
+    "@angular/router/testing",
+    "@angular/router",
+    "rxjs",
+    "rxjs/operators",
+]}
+
+def _rollup(ctx, bundle_name, rollup_config, entry_point, inputs, js_output, format = "es", package_name = "", include_tslib = False):
   map_output = ctx.actions.declare_file(js_output.basename + ".map", sibling = js_output)
 
   args = ctx.actions.args()
-  args.add(["--config", rollup_config.path])
+  args.add("--config", rollup_config)
 
-  args.add(["--input", entry_point])
-  args.add(["--output.file", js_output.path])
-  args.add(["--output.format", format])
-  args.add(["--name", ctx.label.name])
+  args.add("--input", entry_point)
+  args.add("--output.file", js_output)
+  args.add("--output.format", format)
+  if package_name:
+    args.add("--output.name", _global_name(package_name))
+    args.add("--amd.id", package_name)
 
   # Note: if the input has external source maps then we need to also install and use
   #   `rollup-plugin-sourcemaps`, which will require us to use rollup.config.js file instead
@@ -73,11 +95,15 @@ def _rollup(ctx, rollup_config, entry_point, inputs, js_output, format = "es"):
   args.add("--sourcemap")
 
   globals = dict(WELL_KNOWN_GLOBALS, **ctx.attr.globals)
-  args.add("--external")
-  args.add(globals.keys(), join_with=",")
+  external = globals.keys()
+  if not include_tslib:
+    external.append("tslib")
+  args.add_joined("--external", external, join_with=",")
 
-  args.add("--globals")
-  args.add(["%s:%s" % g for g in globals.items()], join_with=",")
+  args.add_joined(
+      "--globals",
+      ["%s:%s" % g for g in globals.items()],
+      join_with=",")
 
   args.add("--silent")
 
@@ -87,7 +113,7 @@ def _rollup(ctx, rollup_config, entry_point, inputs, js_output, format = "es"):
   if ctx.version_file:
     other_inputs.append(ctx.version_file)
   ctx.actions.run(
-      progress_message = "Angular Packaging: rolling up %s" % ctx.label.name,
+      progress_message = "ng_package: Rollup %s %s" % (bundle_name, ctx.label),
       mnemonic = "AngularPackageRollup",
       inputs = inputs.to_list() + other_inputs,
       outputs = [js_output, map_output],
@@ -109,12 +135,26 @@ def _flatten_paths(directory):
       result.append(f.map.path)
   return result
 
+
+# takes an depset of files and returns an array that doesn't contain any generated files by ngc
+def _filter_out_generated_files(files):
+  result = []
+  for file in files:
+    if (not(file.path.endswith(".ngfactory.js") or file.path.endswith(".ngsummary.js") or file.path.endswith(".ngstyle.js"))):
+      result.append(file)
+  return depset(result)
+
+
+def _esm2015_root_dir(ctx):
+  return ctx.label.name + ".es6"
+
+
 # ng_package produces package that is npm-ready.
 def _ng_package_impl(ctx):
   npm_package_directory = ctx.actions.declare_directory("%s.ng_pkg" % ctx.label.name)
 
-  esm_2015_files = collect_es6_sources(ctx)
-  esm5_sources = depset(flatten_esm5(ctx))
+  esm_2015_files = _filter_out_generated_files(collect_es6_sources(ctx))
+  esm5_sources = _filter_out_generated_files(flatten_esm5(ctx))
 
   # These accumulators match the directory names where the files live in the
   # Angular package format.
@@ -138,10 +178,14 @@ def _ng_package_impl(ctx):
   # - in this package or a subpackage
   # - those that have a module_name attribute (they produce flat module metadata)
   flat_module_metadata = []
+  # Name given in the package.json name field, eg. @angular/core/testing
+  package_name = ""
   deps_in_package = [d for d in ctx.attr.deps if d.label.package.startswith(ctx.label.package)]
   for dep in deps_in_package:
     # Intentionally evaluates to empty string for the main entry point
     entry_point = dep.label.package[len(ctx.label.package) + 1:]
+    if hasattr(dep, "module_name"):
+      package_name = dep.module_name
     if hasattr(dep, "angular") and hasattr(dep.angular, "flat_module_metadata"):
       flat_module_metadata.append(dep.angular.flat_module_metadata)
       flat_module_out_file = dep.angular.flat_module_metadata.flat_module_out_file + ".js"
@@ -152,7 +196,7 @@ def _ng_package_impl(ctx):
     es2015_entry_point = "/".join([p for p in [
         ctx.bin_dir.path,
         ctx.label.package,
-        ctx.label.name + ".es6",
+        _esm2015_root_dir(ctx),
         ctx.label.package,
         entry_point,
         flat_module_out_file,
@@ -166,7 +210,8 @@ def _ng_package_impl(ctx):
 
     if entry_point:
       # TODO jasonaden says there is no particular reason these filenames differ
-      umd_output_filename = "-".join([ctx.label.package.split("/")[-1]] + entry_point.split("/"))
+      prefix = primary_entry_point_name(ctx.attr.name, ctx.attr.entry_point, ctx.attr.entry_point_name)
+      umd_output_filename = "-".join([prefix] + entry_point.split("/"))
       fesm_output_filename = entry_point.replace("/", "__")
       fesm2015_output = ctx.actions.declare_file("fesm2015/%s.js" % fesm_output_filename)
       fesm5_output = ctx.actions.declare_file("%s.js" % fesm_output_filename)
@@ -178,12 +223,15 @@ def _ng_package_impl(ctx):
       umd_output = ctx.outputs.umd
       min_output = ctx.outputs.umd_min
 
-    config = write_rollup_config(ctx, [], "/".join([ctx.bin_dir.path, ctx.label.package, esm5_root_dir(ctx)]))
+    esm2015_config = write_rollup_config(ctx, [], "/".join([ctx.bin_dir.path, ctx.label.package, _esm2015_root_dir(ctx)]), filename="_%s.rollup_esm2015.conf.js")
+    esm5_config = write_rollup_config(ctx, [], "/".join([ctx.bin_dir.path, ctx.label.package, esm5_root_dir(ctx)]), filename="_%s.rollup_esm5.conf.js")
 
-    fesm2015.append(_rollup(ctx, config, es2015_entry_point, esm_2015_files, fesm2015_output))
-    fesm5.append(_rollup(ctx, config, es5_entry_point, esm5_sources, fesm5_output))
+    fesm2015.append(_rollup(ctx, "fesm2015", esm2015_config, es2015_entry_point, esm_2015_files, fesm2015_output))
+    fesm5.append(_rollup(ctx, "fesm5", esm5_config, es5_entry_point, esm5_sources, fesm5_output))
 
-    bundles.append(_rollup(ctx, config, es5_entry_point, esm5_sources, umd_output, format = "umd"))
+    bundles.append(
+        _rollup(ctx, "umd", esm5_config, es5_entry_point, esm5_sources, umd_output,
+                format = "umd", package_name = package_name, include_tslib = True))
     uglify_sourcemap = run_uglify(ctx, umd_output, min_output,
         config_name = entry_point.replace("/", "_"))
     bundles.append(struct(js = min_output, map = uglify_sourcemap))
@@ -204,8 +252,8 @@ def _ng_package_impl(ctx):
   # The order of arguments matters here, as they are read in order in packager.ts.
   packager_args.add(npm_package_directory.path)
   packager_args.add(ctx.label.package)
-  packager_args.add([ctx.bin_dir.path, ctx.label.package], join_with="/")
-  packager_args.add([ctx.genfiles_dir.path, ctx.label.package], join_with="/")
+  packager_args.add_joined([ctx.bin_dir.path, ctx.label.package], join_with="/")
+  packager_args.add_joined([ctx.genfiles_dir.path, ctx.label.package], join_with="/")
 
   # Marshal the metadata into a JSON string so we can parse the data structure
   # in the TypeScript program easily.
@@ -226,19 +274,19 @@ def _ng_package_impl(ctx):
     # placeholder
     packager_args.add("")
 
-  packager_args.add(_flatten_paths(fesm2015), join_with=",")
-  packager_args.add(_flatten_paths(fesm5), join_with=",")
-  packager_args.add(_flatten_paths(esm2015), join_with=",")
-  packager_args.add(_flatten_paths(esm5), join_with=",")
-  packager_args.add(_flatten_paths(bundles), join_with=",")
-  packager_args.add([s.path for s in ctx.files.srcs], join_with=",")
+  packager_args.add_joined(_flatten_paths(fesm2015), join_with=",")
+  packager_args.add_joined(_flatten_paths(fesm5), join_with=",")
+  packager_args.add_joined(_flatten_paths(esm2015), join_with=",")
+  packager_args.add_joined(_flatten_paths(esm5), join_with=",")
+  packager_args.add_joined(_flatten_paths(bundles), join_with=",")
+  packager_args.add_joined([s.path for s in ctx.files.srcs], join_with=",")
 
   # TODO: figure out a better way to gather runfiles providers from the transitive closure.
-  packager_args.add([d.path for d in ctx.files.data], join_with=",")
+  packager_args.add_joined([d.path for d in ctx.files.data], join_with=",")
 
   if ctx.file.license_banner:
     packager_inputs.append(ctx.file.license_banner)
-    packager_args.add(ctx.file.license_banner.path)
+    packager_args.add(ctx.file.license_banner)
   else:
     # placeholder
     packager_args.add("")
@@ -262,9 +310,9 @@ def _ng_package_impl(ctx):
       ctx,
       devfiles.to_list(),
       [npm_package_directory] + ctx.files.packages)
-  return struct(
+  return [DefaultInfo(
     files = depset([package_dir])
-  )
+  )]
 
 NG_PACKAGE_ATTRS = dict(NPM_PACKAGE_ATTRS, **dict(ROLLUP_ATTRS, **{
     "srcs": attr.label_list(allow_files = True),
