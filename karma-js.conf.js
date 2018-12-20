@@ -29,9 +29,11 @@ module.exports = function(config) {
       {pattern: 'dist/all/@angular/**/*.js', included: false, watched: true},
 
       // Serve AngularJS for `ngUpgrade` testing.
-      {pattern: 'node_modules/angular-1.5/angular.js', included: false, watched: false},
+      {pattern: 'node_modules/angular-1.5/angular?(.min).js', included: false, watched: false},
       {pattern: 'node_modules/angular-mocks-1.5/angular-mocks.js', included: false, watched: false},
-      {pattern: 'node_modules/angular/angular.js', included: false, watched: false},
+      {pattern: 'node_modules/angular-1.6/angular?(.min).js', included: false, watched: false},
+      {pattern: 'node_modules/angular-mocks-1.6/angular-mocks.js', included: false, watched: false},
+      {pattern: 'node_modules/angular/angular?(.min).js', included: false, watched: false},
       {pattern: 'node_modules/angular-mocks/angular-mocks.js', included: false, watched: false},
 
       'node_modules/core-js/client/core.js',
@@ -73,6 +75,7 @@ module.exports = function(config) {
       'dist/all/@angular/benchpress/**',
       'dist/all/@angular/compiler-cli/**',
       'dist/all/@angular/compiler-cli/src/ngtsc/**',
+      'dist/all/@angular/compiler-cli/test/compliance/**',
       'dist/all/@angular/compiler-cli/test/ngtsc/**',
       'dist/all/@angular/compiler/test/aot/**',
       'dist/all/@angular/compiler/test/render3/**',
@@ -81,7 +84,7 @@ module.exports = function(config) {
       'dist/all/@angular/elements/schematics/**',
       'dist/all/@angular/examples/**/e2e_test/*',
       'dist/all/@angular/language-service/**',
-      'dist/all/@angular/router/test/**',
+      'dist/all/@angular/router/**/test/**',
       'dist/all/@angular/platform-browser/testing/e2e_util.js',
       'dist/all/angular1_router.js',
       'dist/examples/**/e2e_test/**',
@@ -109,6 +112,7 @@ module.exports = function(config) {
     // don't need this entire config file.
     proxies: {
       '/base/angular/': '/base/',
+      '/base/ngdeps/': '/base/',
     },
 
     reporters: ['dots'],
@@ -118,12 +122,9 @@ module.exports = function(config) {
       startConnect: false,
       recordVideo: false,
       recordScreenshots: false,
-      options: {
-        'selenium-version': '2.53.0',
-        'command-timeout': 600,
-        'idle-timeout': 600,
-        'max-duration': 5400,
-      }
+      idleTimeout: 600,
+      commandTimeout: 600,
+      maxDuration: 5400,
     },
 
     browserStack: {
@@ -150,10 +151,8 @@ module.exports = function(config) {
       config.sauceLabs.build = buildId;
       config.sauceLabs.tunnelIdentifier = process.env.TRAVIS_JOB_NUMBER;
 
-      // TODO(mlaval): remove once SauceLabs supports websockets.
-      // This speeds up the capturing a bit, as browsers don't even try to use websocket.
-      console.log('>>>> setting socket.io transport to polling <<<<');
-      config.transports = ['polling'];
+      // Try "websocket" for a faster transmission first. Fallback to "polling" if necessary.
+      config.transports = ['websocket', 'polling'];
     }
 
     if (process.env.CI_MODE.startsWith('browserstack')) {

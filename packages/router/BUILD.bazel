@@ -15,8 +15,8 @@ ng_module(
         "//packages/common",
         "//packages/core",
         "//packages/platform-browser",
-        "//packages/upgrade/static",
         "@rxjs",
+        "@rxjs//operators",
     ],
 )
 
@@ -29,8 +29,13 @@ ng_package(
     ],
     entry_point = "packages/router/index.js",
     tags = [
-        "ivy-jit",
         "release-with-framework",
+    ],
+    # Do not add more to this list.
+    # Dependencies on the full npm_package cause long re-builds.
+    visibility = [
+        "//packages/compiler-cli/test:__pkg__",
+        "//packages/compiler-cli/test/transformers:__pkg__",
     ],
     deps = [
         ":router",

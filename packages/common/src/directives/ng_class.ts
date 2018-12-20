@@ -34,7 +34,7 @@ import {Directive, DoCheck, ElementRef, Input, IterableChanges, IterableDiffer, 
  * - `Object` - keys are CSS classes that get added when the expression given in the value
  *              evaluates to a truthy value, otherwise they are removed.
  *
- *
+ * @publicApi
  */
 @Directive({selector: '[ngClass]'})
 export class NgClass implements DoCheck {
@@ -51,22 +51,22 @@ export class NgClass implements DoCheck {
       private _ngEl: ElementRef, private _renderer: Renderer2) {}
 
   @Input('class')
-  set klass(v: string) {
+  set klass(value: string) {
     this._removeClasses(this._initialClasses);
-    this._initialClasses = typeof v === 'string' ? v.split(/\s+/) : [];
+    this._initialClasses = typeof value === 'string' ? value.split(/\s+/) : [];
     this._applyClasses(this._initialClasses);
     this._applyClasses(this._rawClass);
   }
 
   @Input()
-  set ngClass(v: string|string[]|Set<string>|{[klass: string]: any}) {
+  set ngClass(value: string|string[]|Set<string>|{[klass: string]: any}) {
     this._removeClasses(this._rawClass);
     this._applyClasses(this._initialClasses);
 
     this._iterableDiffer = null;
     this._keyValueDiffer = null;
 
-    this._rawClass = typeof v === 'string' ? v.split(/\s+/) : v;
+    this._rawClass = typeof value === 'string' ? value.split(/\s+/) : value;
 
     if (this._rawClass) {
       if (isListLikeIterable(this._rawClass)) {

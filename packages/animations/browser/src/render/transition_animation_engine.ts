@@ -811,7 +811,7 @@ export class TransitionAnimationEngine {
     }
 
     this.driver.query(element, DISABLED_SELECTOR, true).forEach(node => {
-      this.markElementAsDisabled(element, false);
+      this.markElementAsDisabled(node, false);
     });
   }
 
@@ -1514,7 +1514,7 @@ export class TransitionAnimationPlayer implements AnimationPlayer {
 
   getPosition(): number { return this.queued ? 0 : this._player.getPosition(); }
 
-  /* @internal */
+  /** @internal */
   triggerCallback(phaseName: string): void {
     const p = this._player as any;
     if (p.triggerCallback) {

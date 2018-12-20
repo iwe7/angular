@@ -7,9 +7,14 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {bypassSanitizationTrustHtml, bypassSanitizationTrustResourceUrl, bypassSanitizationTrustScript, bypassSanitizationTrustStyle, bypassSanitizationTrustUrl, sanitizeHtml, sanitizeResourceUrl, sanitizeScript, sanitizeStyle, sanitizeUrl} from '../../src/sanitization/sanitization';
+import {setTNodeAndViewData} from '@angular/core/src/render3/state';
+
+import {bypassSanitizationTrustHtml, bypassSanitizationTrustResourceUrl, bypassSanitizationTrustScript, bypassSanitizationTrustStyle, bypassSanitizationTrustUrl} from '../../src/sanitization/bypass';
+import {sanitizeHtml, sanitizeResourceUrl, sanitizeScript, sanitizeStyle, sanitizeUrl} from '../../src/sanitization/sanitization';
 
 describe('sanitization', () => {
+  beforeEach(() => setTNodeAndViewData(null !, [] as any));
+  afterEach(() => setTNodeAndViewData(null !, null !));
   class Wrap {
     constructor(private value: string) {}
     toString() { return this.value; }

@@ -8,48 +8,36 @@
 
 import {ChangeDetectionStrategy} from '../change_detection/constants';
 import {Provider} from '../di';
-import {R3_COMPILE_COMPONENT, R3_COMPILE_DIRECTIVE, R3_COMPILE_PIPE} from '../ivy_switch';
+import {NG_BASE_DEF} from '../render3/fields';
+import {compileComponent as render3CompileComponent, compileDirective as render3CompileDirective} from '../render3/jit/directive';
+import {compilePipe as render3CompilePipe} from '../render3/jit/pipe';
 import {Type} from '../type';
 import {TypeDecorator, makeDecorator, makePropDecorator} from '../util/decorators';
+import {noop} from '../util/noop';
+import {fillProperties} from '../util/property';
+
 import {ViewEncapsulation} from './view';
+
 
 
 /**
  * Type of the Directive decorator / constructor function.
+ * @publicApi
  */
 export interface DirectiveDecorator {
   /**
-   * Marks a class as an Angular directive and collects directive configuration
-   * metadata.
-   *
-   * Directive decorator allows you to mark a class as an Angular directive and provide additional
-   * metadata that determines how the directive should be processed, instantiated and used at
+   * Marks a class as an Angular directive. You can define your own
+   * directives to attach custom behavior to elements in the DOM.
+   * The options provide configuration metadata that determines
+   * how the directive should be processed, instantiated and used at
    * runtime.
    *
-   * Directives allow you to attach behavior to elements in the DOM..
+   * Directive classes, like component classes, can implement
+   * [life-cycle hooks](guide/lifecycle-hooks) to influence their configuration and behavior.
    *
-   * A directive must belong to an NgModule in order for it to be usable
-   * by another directive, component, or application. To specify that a directive is a member of an
-   * NgModule,
-   * you should list it in the `declarations` field of that NgModule.
-   *
-   * In addition to the metadata configuration specified via the Directive decorator,
-   * directives can control their runtime behavior by implementing various Life-Cycle hooks.
-   *
-   * **Metadata Properties:**
-   *
-   * * **exportAs** - name under which the component instance is exported in a template. Can be
-   * given a single name or a comma-delimited list of names.
-   * * **host** - map of class property to host element bindings for events, properties and
-   * attributes
-   * * **inputs** - list of class property names to data-bind as component inputs
-   * * **outputs** - list of class property names that expose output events that others can
-   * subscribe to
-   * * **providers** - list of providers available to this component and its children
-   * * **queries** -  configure queries that can be injected into the component
-   * * **selector** - css selector that identifies this component in a template
    *
    * @usageNotes
+   * To define a directive, mark the class with the decorator and provide metadata.
    *
    * ```
    * import {Directive} from '@angular/core';
@@ -58,7 +46,25 @@ export interface DirectiveDecorator {
    *   selector: 'my-directive',
    * })
    * export class MyDirective {
+   * ...
    * }
+   * ```
+   *
+   * ### Declaring directives
+   *
+   * Directives are [declarables](guide/glossary#declarable).
+   * They must be declared by an NgModule
+   * in order to be usable in an app.
+   *
+   * A directive must belong to exactly one NgModule. Do not re-declare
+   * a directive imported from another module.
+   * List the directive class in the `declarations` field of an NgModule.
+   *
+   * ```
+   * declarations: [
+   *  AppComponent,
+   *  MyDirective
+   * ],
    * ```
    *
    * @Annotation
@@ -71,28 +77,31 @@ export interface DirectiveDecorator {
   new (obj: Directive): Directive;
 }
 
+/**
+ * Directive decorator and metadata.
+ *
+ * @Annotation
+ * @publicApi
+ */
 export interface Directive {
   /**
-   * The CSS selector that triggers the instantiation of a directive.
+   * The CSS selector that identifies this directive in a template
+   * and triggers instantiation of the directive.
    *
-   * Angular only allows directives to trigger on CSS selectors that do not cross element
-   * boundaries.
+   * Declare as one of the following:
    *
-   * `selector` may be declared as one of the following:
+   * - `element-name`: Select by element name.
+   * - `.class`: Select by class name.
+   * - `[attribute]`: Select by attribute name.
+   * - `[attribute=value]`: Select by attribute name and value.
+   * - `:not(sub_selector)`: Select only if the element does not match the `sub_selector`.
+   * - `selector1, selector2`: Select if either `selector1` or `selector2` matches.
    *
-   * - `element-name`: select by element name.
-   * - `.class`: select by class name.
-   * - `[attribute]`: select by attribute name.
-   * - `[attribute=value]`: select by attribute name and value.
-   * - `:not(sub_selector)`: select only if the element does not match the `sub_selector`.
-   * - `selector1, selector2`: select if either `selector1` or `selector2` matches.
+   * Angular only allows directives to apply on CSS selectors that do not cross
+   * element boundaries.
    *
-   * @usageNotes
-   * ### Example
-   *
-   * Suppose we have a directive with an `input[type=text]` selector.
-   *
-   * And the following HTML:
+   * For the following template HTML, a directive with an `input[type=text]` selector,
+   * would be instantiated only on the `<input type="text">` element.
    *
    * ```html
    * <form>
@@ -101,8 +110,6 @@ export interface Directive {
    * <form>
    * ```
    *
-   * The directive would only be instantiated on the `<input type="text">` element.
-   *
    */
   selector?: string;
 
@@ -110,7 +117,6 @@ export interface Directive {
    * Enumerates the set of data-bound input properties for a directive
    *
    * Angular automatically updates input properties during change detection.
-   *
    * The `inputs` property defines a set of `directiveProperty` to `bindingProperty`
    * configuration:
    *
@@ -118,8 +124,8 @@ export interface Directive {
    * - `bindingProperty` specifies the DOM property where the value is read from.
    *
    * When `bindingProperty` is not provided, it is assumed to be equal to `directiveProperty`.
-   *
    * @usageNotes
+   *
    * ### Example
    *
    * The following example creates a component with two data-bound properties.
@@ -138,6 +144,7 @@ export interface Directive {
    *   id: string;
    *
    * ```
+   *
    */
   inputs?: string[];
 
@@ -145,7 +152,7 @@ export interface Directive {
    * Enumerates the set of event-bound output properties.
    *
    * When an output property emits an event, an event handler attached to that event
-   * the template is invoked.
+   * in the template is invoked.
    *
    * The `outputs` property defines a set of `directiveProperty` to `bindingProperty`
    * configuration:
@@ -154,6 +161,7 @@ export interface Directive {
    * - `bindingProperty` specifies the DOM property the event handler is attached to.
    *
    * @usageNotes
+   *
    * ### Example
    *
    * ```typescript
@@ -171,142 +179,14 @@ export interface Directive {
    * class MainComponent {
    * }
    * ```
+   *
    */
   outputs?: string[];
 
   /**
-   * Specify the events, actions, properties and attributes related to the host element.
-   *
-   * @usageNotes
-   * The key corresponds to the name of the event, property or attribute on the host to
-   * bind. The value is formatted differently depending upon the type of the binding.
-   *
-   * ### Host Listeners
-   *
-   * Specifies which DOM events a directive listens to via a set of `(event)` to `method`
-   * key-value pairs:
-   *
-   * - `event`: the DOM event that the directive listens to.
-   * - `statement`: the statement to execute when the event occurs.
-   * If the evaluation of the statement returns `false`, then `preventDefault`is applied on the DOM
-   * event.
-   *
-   * To listen to global events, a target must be added to the event name.
-   * The target can be `window`, `document` or `body`.
-   *
-   * When writing a directive event binding, you can also refer to the $event local variable.
-   *
-   * The following example declares a directive that attaches a click listener to the button and
-   * counts clicks.
-   *
-   * ```typescript
-   * @Directive({
-   *   selector: 'button[counting]',
-   *   host: {
-   *     '(click)': 'onClick($event.target)'
-   *   }
-   * })
-   * class CountClicks {
-   *   numberOfClicks = 0;
-   *
-   *   onClick(btn) {
-   *     console.log("button", btn, "number of clicks:", this.numberOfClicks++);
-   *   }
-   * }
-   *
-   * @Component({
-   *   selector: 'app',
-   *   template: `<button counting>Increment</button>`
-   * })
-   * class App {}
-   * ```
-   * See [live demo](http://plnkr.co/edit/DlA5KU?p=preview)
-   *
-   * ### Host Property Bindings
-   *
-   * Specifies which DOM properties a directive updates.
-   *
-   * Angular automatically checks host property bindings during change detection.
-   * If a binding changes, it will update the host element of the directive.
-   *
-   * The following example creates a directive that sets the `valid` and `invalid` classes
-   * on the DOM element that has ngModel directive on it.
-   *
-   * ```typescript
-   * @Directive({
-   *   selector: '[ngModel]',
-   *   host: {
-   *     '[class.valid]': 'valid',
-   *     '[class.invalid]': 'invalid'
-   *   }
-   * })
-   * class NgModelStatus {
-   *   constructor(public control:NgModel) {}
-   *   get valid { return this.control.valid; }
-   *   get invalid { return this.control.invalid; }
-   * }
-   *
-   * @Component({
-   *   selector: 'app',
-   *   template: `<input [(ngModel)]="prop">`
-   * })
-   * class App {
-   *   prop;
-   * }
-   * ```
-   * See [live demo](http://plnkr.co/edit/gNg0ED?p=preview).
-   *
-   * ### Attributes
-   *
-   * Specifies static attributes that should be propagated to a host element.
-   *
-   * In this example using `my-button` directive (ex.: `<div my-button></div>`) on a host element
-   * (here: `<div>` ) will ensure that this element will get the "button" role.
-   *
-   * ```typescript
-   * @Directive({
-   *   selector: '[my-button]',
-   *   host: {
-   *     'role': 'button'
-   *   }
-   * })
-   * class MyButton {
-   * }
-   * ```
-   * Attaching the `my-button` directive to the host `<div>` element
-   * ensures that this element gets the "button" role.
-   *
-   * ```html
-   * <div my-button></div>
-   * ```
-   *
-   * @usageNotes
-   * ### Simple Example
-   *
-   * The following simple example shows how a class is injected,
-   * using a provider specified in the directive metadata:
-   *
-   * ```
-   * class Greeter {
-   *    greet(name:string) {
-   *      return 'Hello ' + name + '!';
-   *    }
-   * }
-   *
-   * @Directive({
-   *   selector: 'greet',
-   *   providers: [
-   *     Greeter
-   *   ]
-   * })
-   * class HelloWorld {
-   *   greeter:Greeter;
-   *
-   *   constructor(greeter:Greeter) {
-   *     this.greeter = greeter;
-   *   }
-   * }
-   * ```
+   * Configures the [injector](guide/glossary#injector) of this
+   * directive or component with a [token](guide/glossary#di-token)
+   * that maps to a [provider](guide/glossary#provider) of a dependency.
    */
   providers?: Provider[];
 
@@ -314,6 +194,7 @@ export interface Directive {
    * Defines the name that can be used in the template to assign this directive to a variable.
    *
    * @usageNotes
+   *
    * ### Simple Example
    *
    * ```
@@ -330,8 +211,8 @@ export interface Directive {
    * })
    * class MainComponent {
    * }
-   *
    * ```
+   *
    */
   exportAs?: string;
 
@@ -376,62 +257,6 @@ export interface Directive {
   queries?: {[key: string]: any};
 
   /**
-   * If true, this directive/component will be skipped by the AOT compiler and so will always be
-   * compiled using JIT.
-   *
-   * This exists to support future Ivy work and has no effect currently.
-   */
-  jit?: true;
-}
-
-/**
- * Directive decorator and metadata.
- *
- * @Annotation
- */
-export interface Directive {
-  /**
-   * The CSS selector that identifies this directive in a template
-   * and triggers instantiation of the directive.
-   *
-   * Declare as one of the following:
-   *
-   * - `element-name`: Select by element name.
-   * - `.class`: Select by class name.
-   * - `[attribute]`: Select by attribute name.
-   * - `[attribute=value]`: Select by attribute name and value.
-   * - `:not(sub_selector)`: Select only if the element does not match the `sub_selector`.
-   * - `selector1, selector2`: Select if either `selector1` or `selector2` matches.
-   *
-   * Angular only allows directives to apply on CSS selectors that do not cross
-   * element boundaries.
-   *
-   * For the following template HTML, a directive with an `input[type=text]` selector,
-   * would be instantiated only on the `<input type="text">` element.
-   *
-   * ```html
-   * <form>
-   *   <input type="text">
-   *   <input type="radio">
-   * <form>
-   * ```
-   *
-   */
-  selector?: string;
-
-  /**
-   * The set of event-bound output properties.
-   * When an output property emits an event, an event handler attached
-   * to that event in the template is invoked.
-   *
-   * Each output property maps a `directiveProperty` to a `bindingProperty`:
-   * - `directiveProperty` specifies the component property that emits events.
-   * - `bindingProperty` specifies the HTML attribute the event handler is attached to.
-   *
-   */
-  outputs?: string[];
-
-  /**
    * Maps class properties to host element bindings for properties,
    * attributes, and events, using a set of key-value pairs.
    *
@@ -456,37 +281,27 @@ export interface Directive {
   host?: {[key: string]: string};
 
   /**
-   * See the `Component` decorator.
-   */
-  providers?: Provider[];
-
-  /**
-   * The name or names that can be used in the template to assign this directive to a variable.
-   * For multiple names, use a comma-separated string.
+   * If true, this directive/component will be skipped by the AOT compiler and so will always be
+   * compiled using JIT.
    *
+   * This exists to support future Ivy work and has no effect currently.
    */
-  exportAs?: string;
-
-  /**
-   * Configures the queries that will be injected into the directive.
-   *
-   * Content queries are set before the `ngAfterContentInit` callback is called.
-   * View queries are set before the `ngAfterViewInit` callback is called.
-   *
-   */
-  queries?: {[key: string]: any};
+  jit?: true;
 }
 
 /**
  * Type of the Directive metadata.
+ *
+ * @publicApi
  */
 export const Directive: DirectiveDecorator = makeDecorator(
     'Directive', (dir: Directive = {}) => dir, undefined, undefined,
-    (type: Type<any>, meta: Directive) => (R3_COMPILE_DIRECTIVE || (() => {}))(type, meta));
+    (type: Type<any>, meta: Directive) => SWITCH_COMPILE_DIRECTIVE(type, meta));
 
 /**
  * Component decorator interface
  *
+ * @publicApi
  */
 export interface ComponentDecorator {
   /**
@@ -562,6 +377,67 @@ export interface ComponentDecorator {
    *
    * ```
    *
+   * ### Preserving whitespace
+   *
+   * Removing whitespace can greatly reduce AOT-generated code size and speed up view creation.
+   * As of Angular 6, the default for `preserveWhitespaces` is false (whitespace is removed).
+   * To change the default setting for all components in your application, set
+   * the `preserveWhitespaces` option of the AOT compiler.
+   *
+   * By default, the AOT compiler removes whitespace characters as follows:
+   * * Trims all whitespaces at the beginning and the end of a template.
+   * * Removes whitespace-only text nodes. For example,
+   *
+   * ```
+   * <button>Action 1</button>  <button>Action 2</button>
+   * ```
+   *
+   * becomes:
+   *
+   * ```
+   * <button>Action 1</button><button>Action 2</button>
+   * ```
+   *
+   * * Replaces a series of whitespace characters in text nodes with a single space.
+   * For example, `<span>\n some text\n</span>` becomes `<span> some text </span>`.
+   * * Does NOT alter text nodes inside HTML tags such as `<pre>` or `<textarea>`,
+   * where whitespace characters are significant.
+   *
+   * Note that these transformations can influence DOM nodes layout, although impact
+   * should be minimal.
+   *
+   * You can override the default behavior to preserve whitespace characters
+   * in certain fragments of a template. For example, you can exclude an entire
+   * DOM sub-tree by using the `ngPreserveWhitespaces` attribute:
+   *
+   * ```html
+   * <div ngPreserveWhitespaces>
+   *     whitespaces are preserved here
+   *     <span>    and here </span>
+   * </div>
+   * ```
+   *
+   * You can force a single space to be preserved in a text node by using `&ngsp;`,
+   * which is replaced with a space character by Angular's template
+   * compiler:
+   *
+   * ```html
+   * <a>Spaces</a>&ngsp;<a>between</a>&ngsp;<a>links.</a>
+   * <!-->compiled to be equivalent to:</>
+   *  <a>Spaces</a> <a>between</a> <a>links.</a>
+   * ```
+   *
+   * Note that sequences of `&ngsp;` are still collapsed to just one space character when
+   * the `preserveWhitespaces` option is set to `false`.
+   *
+   * ```html
+   * <a>before</a>&ngsp;&ngsp;&ngsp;<a>after</a>
+   * <!-->compiled to be equivalent to:</>
+   *  <a>Spaces</a> <a>between</a> <a>links.</a>
+   * ```
+   *
+   * To preserve sequences of whitespace characters, use the
+   * `ngPreserveWhitespaces` attribute.
    *
    * @Annotation
    */
@@ -574,6 +450,8 @@ export interface ComponentDecorator {
 
 /**
  * Supplies configuration metadata for an Angular component.
+ *
+ * @publicApi
  */
 export interface Component extends Directive {
   /**
@@ -679,98 +557,18 @@ export interface Component extends Directive {
 /**
  * Component decorator and metadata.
  *
- * @usageNotes
- *
- * ### Using animations
- *
- * The following snippet shows an animation trigger in a component's
- * metadata. The trigger is attached to an element in the component's
- * template, using "@_trigger_name_", and a state expression that is evaluated
- * at run time to determine whether the animation should start.
- *
- * ```typescript
- * @Component({
- *   selector: 'animation-cmp',
- *   templateUrl: 'animation-cmp.html',
- *   animations: [
- *     trigger('myTriggerName', [
- *       state('on', style({ opacity: 1 }),
- *       state('off', style({ opacity: 0 }),
- *       transition('on => off', [
- *         animate("1s")
- *       ])
- *     ])
- *   ]
- * })
- * ```
- *
- * ```html
- * <!-- animation-cmp.html -->
- * <div @myTriggerName="expression">...</div>
- * ```
- *
- * ### Preserving whitespace
- *
- * Removing whitespace can greatly reduce AOT-generated code size, and speed up view creation.
- * As of Angular 6, default for `preserveWhitespaces` is false (whitespace is removed).
- * To change the default setting for all components in your application, set
- * the `preserveWhitespaces` option of the AOT compiler.
- *
- * Current implementation removes whitespace characters as follows:
- * - Trims all whitespaces at the beginning and the end of a template.
- * - Removes whitespace-only text nodes. For example,
- * `<button>Action 1</button>  <button>Action 2</button>` becomes
- * `<button>Action 1</button><button>Action 2</button>`.
- * - Replaces a series of whitespace characters in text nodes with a single space.
- * For example, `<span>\n some text\n</span>` becomes `<span> some text </span>`.
- * - Does NOT alter text nodes inside HTML tags such as `<pre>` or `<textarea>`,
- * where whitespace characters are significant.
- *
- * Note that these transformations can influence DOM nodes layout, although impact
- * should be minimal.
- *
- * You can override the default behavior to preserve whitespace characters
- * in certain fragments of a template. For example, you can exclude an entire
- * DOM sub-tree by using the `ngPreserveWhitespaces` attribute:
- *
- * ```html
- * <div ngPreserveWhitespaces>
- *     whitespaces are preserved here
- *     <span>    and here </span>
- * </div>
- * ```
- *
- * You can force a single space to be preserved in a text node by using `&ngsp;`,
- * which is replaced with a space character by Angular's template
- * compiler:
- *
- * ```html
- * <a>Spaces</a>&ngsp;<a>between</a>&ngsp;<a>links.</a>
- * <!-->compiled to be equivalent to:</>
- *  <a>Spaces</a> <a>between</a> <a>links.</a>
- * ```
- *
- * Note that sequences of `&ngsp;` are still collapsed to just one space character when
- * the `preserveWhitespaces` option is set to `false`.
- *
- * ```html
- * <a>before</a>&ngsp;&ngsp;&ngsp;<a>after</a>
- * <!-->compiled to be equivalent to:</>
- *  <a>Spaces</a> <a>between</a> <a>links.</a>
- * ```
- *
- * To preserve sequences of whitespace characters, use the
- * `ngPreserveWhitespaces` attribute.
- *
  * @Annotation
+ * @publicApi
  */
 export const Component: ComponentDecorator = makeDecorator(
     'Component', (c: Component = {}) => ({changeDetection: ChangeDetectionStrategy.Default, ...c}),
     Directive, undefined,
-    (type: Type<any>, meta: Component) => (R3_COMPILE_COMPONENT || (() => {}))(type, meta));
+    (type: Type<any>, meta: Component) => SWITCH_COMPILE_COMPONENT(type, meta));
 
 /**
  * Type of the Pipe decorator / constructor function.
+ *
+ * @publicApi
  */
 export interface PipeDecorator {
   /**
@@ -787,6 +585,8 @@ export interface PipeDecorator {
 
 /**
  * Type of the Pipe metadata.
+ *
+ * @publicApi
  */
 export interface Pipe {
   /**
@@ -809,17 +609,16 @@ export interface Pipe {
 }
 
 /**
- *
- *
  * @Annotation
+ * @publicApi
  */
 export const Pipe: PipeDecorator = makeDecorator(
     'Pipe', (p: Pipe) => ({pure: true, ...p}), undefined, undefined,
-    (type: Type<any>, meta: Pipe) => (R3_COMPILE_PIPE || (() => {}))(type, meta));
+    (type: Type<any>, meta: Pipe) => SWITCH_COMPILE_PIPE(type, meta));
 
 
 /**
- *
+ * @publicApi
  */
 export interface InputDecorator {
   /**
@@ -847,7 +646,7 @@ export interface InputDecorator {
 /**
  * Type of metadata for an `Input` property.
  *
- *
+ * @publicApi
  */
 export interface Input {
   /**
@@ -870,7 +669,7 @@ export interface Input {
    *   selector: 'bank-account',
    *   template: `
    *     Bank Name: {{bankName}}
-  *      Account Id: {{id}}
+   *     Account Id: {{id}}
    *   `
    * })
    * class BankAccount {
@@ -893,19 +692,57 @@ export interface Input {
    *
    * class App {}
    * ```
+   *
    */
   bindingPropertyName?: string;
 }
 
+const initializeBaseDef = (target: any): void => {
+  const constructor = target.constructor;
+  const inheritedBaseDef = constructor.ngBaseDef;
+
+  const baseDef = constructor.ngBaseDef = {
+    inputs: {},
+    outputs: {},
+    declaredInputs: {},
+  };
+
+  if (inheritedBaseDef) {
+    fillProperties(baseDef.inputs, inheritedBaseDef.inputs);
+    fillProperties(baseDef.outputs, inheritedBaseDef.outputs);
+    fillProperties(baseDef.declaredInputs, inheritedBaseDef.declaredInputs);
+  }
+};
+
 /**
- *
- * @Annotation
+ * Does the work of creating the `ngBaseDef` property for the @Input and @Output decorators.
+ * @param key "inputs" or "outputs"
  */
-export const Input: InputDecorator =
-    makePropDecorator('Input', (bindingPropertyName?: string) => ({bindingPropertyName}));
+const updateBaseDefFromIOProp = (getProp: (baseDef: {inputs?: any, outputs?: any}) => any) =>
+    (target: any, name: string, ...args: any[]) => {
+      const constructor = target.constructor;
+
+      if (!constructor.hasOwnProperty(NG_BASE_DEF)) {
+        initializeBaseDef(target);
+      }
+
+      const baseDef = constructor.ngBaseDef;
+      const defProp = getProp(baseDef);
+      defProp[name] = args[0];
+    };
+
+/**
+ * @Annotation
+ * @publicApi
+ */
+export const Input: InputDecorator = makePropDecorator(
+    'Input', (bindingPropertyName?: string) => ({bindingPropertyName}), undefined,
+    updateBaseDefFromIOProp(baseDef => baseDef.inputs || {}));
 
 /**
  * Type of the Output decorator / constructor function.
+ *
+ * @publicApi
  */
 export interface OutputDecorator {
   /**
@@ -929,19 +766,25 @@ export interface OutputDecorator {
 
 /**
  * Type of the Output metadata.
+ *
+ * @publicApi
  */
 export interface Output { bindingPropertyName?: string; }
 
 /**
- *
  * @Annotation
+ * @publicApi
  */
-export const Output: OutputDecorator =
-    makePropDecorator('Output', (bindingPropertyName?: string) => ({bindingPropertyName}));
+export const Output: OutputDecorator = makePropDecorator(
+    'Output', (bindingPropertyName?: string) => ({bindingPropertyName}), undefined,
+    updateBaseDefFromIOProp(baseDef => baseDef.outputs || {}));
+
 
 
 /**
  * Type of the HostBinding decorator / constructor function.
+ *
+ * @publicApi
  */
 export interface HostBindingDecorator {
   /**
@@ -971,6 +814,7 @@ export interface HostBindingDecorator {
    *   prop;
    * }
    * ```
+   *
    */
   (hostPropertyName?: string): any;
   new (hostPropertyName?: string): any;
@@ -979,12 +823,13 @@ export interface HostBindingDecorator {
 /**
  * Type of the HostBinding metadata.
  *
+ * @publicApi
  */
 export interface HostBinding { hostPropertyName?: string; }
 
 /**
- *
  * @Annotation
+ * @publicApi
  */
 export const HostBinding: HostBindingDecorator =
     makePropDecorator('HostBinding', (hostPropertyName?: string) => ({hostPropertyName}));
@@ -992,6 +837,8 @@ export const HostBinding: HostBindingDecorator =
 
 /**
  * Type of the HostListener decorator / constructor function.
+ *
+ * @publicApi
  */
 export interface HostListenerDecorator {
   (eventName: string, args?: string[]): any;
@@ -1000,6 +847,8 @@ export interface HostListenerDecorator {
 
 /**
  * Type of the HostListener metadata.
+ *
+ * @publicApi
  */
 export interface HostListener {
   /**
@@ -1042,6 +891,21 @@ export interface HostListener {
  * ```
  *
  * @Annotation
+ * @publicApi
  */
 export const HostListener: HostListenerDecorator =
     makePropDecorator('HostListener', (eventName?: string, args?: string[]) => ({eventName, args}));
+
+
+
+export const SWITCH_COMPILE_COMPONENT__POST_R3__ = render3CompileComponent;
+export const SWITCH_COMPILE_DIRECTIVE__POST_R3__ = render3CompileDirective;
+export const SWITCH_COMPILE_PIPE__POST_R3__ = render3CompilePipe;
+
+const SWITCH_COMPILE_COMPONENT__PRE_R3__ = noop;
+const SWITCH_COMPILE_DIRECTIVE__PRE_R3__ = noop;
+const SWITCH_COMPILE_PIPE__PRE_R3__ = noop;
+
+const SWITCH_COMPILE_COMPONENT: typeof render3CompileComponent = SWITCH_COMPILE_COMPONENT__PRE_R3__;
+const SWITCH_COMPILE_DIRECTIVE: typeof render3CompileDirective = SWITCH_COMPILE_DIRECTIVE__PRE_R3__;
+const SWITCH_COMPILE_PIPE: typeof render3CompilePipe = SWITCH_COMPILE_PIPE__PRE_R3__;

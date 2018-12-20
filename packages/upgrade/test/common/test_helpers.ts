@@ -7,15 +7,23 @@
  */
 import {setAngularJSGlobal} from '@angular/upgrade/src/common/angular1';
 
+// Whether the upgrade tests should run against AngularJS minified or not. This can be
+// temporarily switched to "false" in order to make it easy to debug AngularJS locally.
+const TEST_MINIFIED = true;
+const ANGULARJS_FILENAME = TEST_MINIFIED ? 'angular.min.js' : 'angular.js';
 
 const ng1Versions = [
   {
     label: '1.5',
-    files: ['angular-1.5/angular.js', 'angular-mocks-1.5/angular-mocks.js'],
+    files: [`angular-1.5/${ANGULARJS_FILENAME}`, 'angular-mocks-1.5/angular-mocks.js'],
   },
   {
     label: '1.6',
-    files: ['angular/angular.js', 'angular-mocks/angular-mocks.js'],
+    files: [`angular-1.6/${ANGULARJS_FILENAME}`, 'angular-mocks-1.6/angular-mocks.js'],
+  },
+  {
+    label: '1.7',
+    files: [`angular/${ANGULARJS_FILENAME}`, 'angular-mocks/angular-mocks.js'],
   },
 ];
 
@@ -49,31 +57,59 @@ export function createWithEachNg1VersionFn(setNg1: typeof setAngularJSGlobal) {
       }
 
       beforeAll(done => {
+        const restoreJasmineMethods = patchJasmineMethods();
+        const onSuccess = () => {
+          restoreJasmineMethods();
+          done();
+        };
+        const onError = (err: any) => {
+          restoreJasmineMethods();
+          done.fail(err);
+        };
+
         // Load AngularJS before running tests.
         files
             .reduce(
                 (prev, file) => prev.then(() => new Promise<void>((resolve, reject) => {
-                                            const restoreMethods = patchJasmineMethods();
                                             const script = document.createElement('script');
-                                            script.src = `base/angular/node_modules/${file}`;
-                                            script.onerror = reject;
+                                            script.async = true;
+                                            script.onerror = () => {
+                                              // Whenever the script failed loading, browsers will
+                                              // just pass an "ErrorEvent" which does not contain
+                                              // useful information on most browsers we run tests
+                                              // against. In order to avoid writing logic to convert
+                                              // the event into a readable error and since just
+                                              // passing the event might cause people to spend
+                                              // unnecessary time debugging the "ErrorEvent", we
+                                              // create a simple error that doesn't imply that there
+                                              // is a lot of information within the "ErrorEvent".
+                                              reject(`An error occurred while loading: "${file}".`);
+                                            };
                                             script.onload = () => {
                                               document.body.removeChild(script);
-                                              restoreMethods();
                                               resolve();
                                             };
+                                            script.src = `base/ngdeps/node_modules/${file}`;
                                             document.body.appendChild(script);
                                           })),
                 Promise.resolve())
             .then(() => setNg1(win.angular))
-            .then(done, done.fail);
-      });
+            .then(onSuccess, onError);
+
+        // When Saucelabs is flaky, some browsers (esp. mobile) take some time to load and execute
+        // the AngularJS scripts. Specifying a higher timeout here, reduces flaky-ness.
+      }, 60000);
 
       afterAll(() => {
-        // In these tests we are loading different versions of AngularJS on the same window.
-        // AngularJS leaves an "expandoId" property on `document`, which can trick subsequent
-        // `window.angular` instances into believing an app is already bootstrapped.
-        win.angular.element(document).removeData();
+        // `win.angular` will not be defined if loading the script in `berofeAll()` failed. In that
+        // case, avoid causing another error in `afterAll()`, because the reporter only shows the
+        // most recent error (thus hiding the original, possibly more informative, error message).
+        if (win.angular) {
+          // In these tests we are loading different versions of AngularJS on the same window.
+          // AngularJS leaves an "expandoId" property on `document`, which can trick subsequent
+          // `window.angular` instances into believing an app is already bootstrapped.
+          win.angular.element.cleanData([document]);
+        }
 
         // Remove AngularJS to leave a clean state for subsequent tests.
         setNg1(undefined);

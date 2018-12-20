@@ -71,7 +71,7 @@ as well as dynamically loaded in a pop-up dialog.
 This error often means that you haven't declared the directive "x"
 or haven't imported the NgModule to which "x" belongs.
 
-<div class="l-sub-section">
+<div class="alert is-helpful">
 
 Perhaps you declared "x" in an application sub-module but forgot to export it.
 The "x" class isn't visible to other modules until you add it to the `exports` list.
@@ -480,7 +480,7 @@ You can throw an error or take other remedial action.
 Certain NgModules, such as `BrowserModule`, implement such a guard.
 Here is a custom constructor for an NgModule called `CoreModule`.
 
-<code-example path="ngmodule-faq/src/app/core/core.module.ts" region="ctor" title="src/app/core/core.module.ts (Constructor)" linenums="false">
+<code-example path="ngmodule-faq/src/app/core/core.module.ts" region="ctor" header="src/app/core/core.module.ts (Constructor)" linenums="false">
 </code-example>
 
 <hr/>
